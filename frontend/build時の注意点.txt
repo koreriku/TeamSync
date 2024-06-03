@@ -1,0 +1,4 @@
+jsファイルのパスを変更
+baseURLをlocalost:3000から172.16.44.173:3001に変更
+JSONとuploadsフォルダをpublicフォルダを作成し、格納する
+distフォルダにweb.configを配置

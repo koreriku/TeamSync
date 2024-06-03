@@ -1,0 +1,31 @@
+{
+  "name": "chat-vue-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "axios": "^1.5.0",
+    "bcrypt": "^5.1.1",
+    "exceljs": "^4.4.0",
+    "highlight.js": "^11.8.0",
+    "marked": "^9.0.3",
+    "marked-gfm-heading-id": "^3.0.8",
+    "marked-highlight": "^2.0.6",
+    "marked-mangle": "^1.1.4",
+    "vue": "^3.3.4",
+    "vue-markdown-editor": "^0.2.0",
+    "vue-router": "^4.2.4",
+    "vuetify": "^3.4.0-alpha.1"
+  },
+  "devDependencies": {
+    "@mdi/font": "^7.2.96",
+    "@vitejs/plugin-vue": "^4.2.3",
+    "vite": "^4.4.5",
+    "vite-plugin-vue-markdown": "^0.23.8"
+  }
+}

@@ -1,0 +1,13 @@
+body {
+  background-color: #494848;
+}
+
+.point-cursor {
+  cursor: pointer;
+}
+.new-line {
+  white-space: pre-line;
+}
+.tr-data:hover {
+  color: #2196f3;
+}
