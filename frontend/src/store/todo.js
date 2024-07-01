@@ -1,4 +1,4 @@
-import { ref } from "vue";
+import { ref, nextTick } from "vue";
 import axios from "axios";
 import {
   getCurrentDate,
@@ -12,12 +12,14 @@ import {
   convertCategoryIdToName,
   convertPriorityIdToName,
   convertSeDailyReportProcessIdToName,
+  convertSeDailyReportProcessNameToId,
   getStatusAll,
   getCategoryAll,
   getSeDailyReportProcess,
   getPriority,
 } from "./work.js";
 import { users, userInfo, searchOnlyUser } from "./user.js";
+import { convertProjectNameToProjectNo } from "./project.js";
 import ExcelJS from "exceljs";
 import encoding from "encoding-japanese";
 
@@ -34,9 +36,12 @@ const resetTodo = () => {
     day: getCurrentDate(),
     work_id: null,
     user_id: null,
-    title: null,
+    title: "",
+    project: "",
+    project_no: null,
     se_daily_report_process: null,
-    target_progress: 0,
+    se_daily_report_process_name: "",
+    target_progress: 100,
     current_progress: 0,
     required_time: 0,
     overtime: 0,
@@ -67,8 +72,47 @@ const postTodo = async () => {
       }
     });
 };
+const displayDay = ref("");
+const displayToDay = ref("");
 
-const addTodo = (work) => {
+const postOnlyTodo = async () => {
+  displaySnackbar("blue", `ToDoに追加しました。`);
+  editTodo.value.project_no = convertProjectNameToProjectNo(
+    editTodo.value.project
+  );
+  editTodo.value.se_daily_report_process = convertSeDailyReportProcessNameToId(
+    editTodo.value.se_daily_report_process_name
+  );
+  editTodo.value.user_id = userInfo.value.id;
+  await axios.post(todoBASE_URL, editTodo.value).then((res) => {
+    let newTodo = {
+      todo_id: res.data[0].id,
+      work_id_of_todo: null,
+      day: editTodo.value.day,
+      user_id: editTodo.value.user_id,
+      target_progress: editTodo.value.target_progress,
+      required_time: editTodo.value.required_time,
+      current_progress: editTodo.value.current_progress,
+      overtime: editTodo.value.overtime,
+      todo_title: editTodo.value.title,
+      todo_project_no: editTodo.value.project_no,
+      todo_se_daily_report_process: editTodo.value.se_daily_report_process,
+    };
+    for (const user of displayTodoUsers.value) {
+      if (user.id == userInfo.value.id) {
+        if (todoTab.value == "day") {
+          if (editTodo.value.day == displayDay.value)
+            user.detail_todo.push(newTodo);
+        } else {
+          user.detail_todo[editTodo.value.day].push(newTodo);
+        }
+      }
+    }
+  });
+
+  todoRegistrationDialog.value = false;
+};
+const addTodo = async (work) => {
   editTodo.value.work_id = work.id;
   editTodo.value.user_id = userInfo.value.id;
   editTodo.value.target_progress = editTodo.value.target_progress
@@ -83,8 +127,25 @@ const addTodo = (work) => {
   editTodo.value.overtime = editTodo.value.overtime
     ? editTodo.value.overtime
     : 0;
-  postTodo();
-  displaySnackbar("blue", work.title);
+  await postTodo();
+};
+
+const updateToDoDay = () => {
+  nextTick(async () => {
+    if (todoTab.value == "week") {
+      await getTodoWithDayAndUserId(
+        displayDay.value,
+        displayToDay.value,
+        userInfo.value.display_todo.join(",")
+      );
+    } else {
+      await getTodoWithDayAndUserId(
+        displayDay.value,
+        null,
+        userInfo.value.display_todo.join(",")
+      );
+    }
+  });
 };
 
 const getTodoWithDayAndUserId = async (day, toDay, userId) => {
@@ -107,24 +168,26 @@ const getTodoWithDayAndUserId = async (day, toDay, userId) => {
     })
     .then((res) => {
       for (const work of res.data) {
-        work.stateName = convertStatusIdToName(work.state);
-        if (work.se_daily_report_process) {
-          work.seDailyReportProcessName = convertSeDailyReportProcessIdToName(
-            work.se_daily_report_process
-          );
-        }
-        work.staffsName = convertIdToUserName(work.staffs);
-        if (work.priority) {
-          work.priorityName = convertPriorityIdToName(work.priority);
-        } else {
-          work.priorityName = "";
-        }
-        work.categoryName = convertCategoryIdToName(work.category);
-        if (work.registered_staff) {
-          work.registered_staff = Object.assign(
-            {},
-            searchOnlyUser(work.registered_staff)
-          );
+        if (work.work_id_of_todo) {
+          work.stateName = convertStatusIdToName(work.state);
+          if (work.se_daily_report_process) {
+            work.seDailyReportProcessName = convertSeDailyReportProcessIdToName(
+              work.se_daily_report_process
+            );
+          }
+          work.staffsName = convertIdToUserName(work.staffs);
+          if (work.priority) {
+            work.priorityName = convertPriorityIdToName(work.priority);
+          } else {
+            work.priorityName = "";
+          }
+          work.categoryName = convertCategoryIdToName(work.category);
+          if (work.registered_staff) {
+            work.registered_staff = Object.assign(
+              {},
+              searchOnlyUser(work.registered_staff)
+            );
+          }
         }
       }
       if (toDay) {
@@ -241,7 +304,7 @@ const previousToDoDay = ref();
 const deleteTodo = async () => {
   await axios.delete(todoBASE_URL + "?id=" + editTodo.value.id);
   for (const user of displayTodoUsers.value) {
-    if ((user.id = userInfo.value.id)) {
+    if (user.id == userInfo.value.id) {
       if (todoTab.value == "day") {
         for (const [index, work] of Object.entries(user.detail_todo)) {
           if (work.todo_id == editTodo.value.id) {
@@ -312,14 +375,20 @@ const outputSEDailyReportCSV = async () => {
         row.getCell(1).value = 2;
         row.getCell(2).value = num;
         num += 1;
-        row.getCell(3).value = data.project_no;
+        row.getCell(3).value = data.work_id_of_todo
+          ? data.project_no
+          : data.todo_project_no;
         // 工程
-        row.getCell(4).value = data.se_daily_report_process;
+        row.getCell(4).value = data.work_id_of_todo
+          ? data.se_daily_report_process
+          : data.todo_se_daily_report_process;
         row.getCell(5).value = 1;
         row.getCell(6).value = data.required_time ? data.required_time : 0;
         // 時間外
         row.getCell(7).value = data.overtime ? data.overtime : 0;
-        row.getCell(11).value = data.title;
+        row.getCell(11).value = data.work_id_of_todo
+          ? data.title
+          : data.todo_title;
         row.getCell(13).value = "*";
         currentRow += 1;
       }
@@ -348,6 +417,8 @@ export {
   displayTodoTerm,
   todoTab,
   previousToDoDay,
+  displayDay,
+  displayToDay,
   resetTodo,
   postTodo,
   putTodo,
@@ -355,4 +426,6 @@ export {
   deleteTodo,
   outputSEDailyReportCSV,
   addTodo,
+  postOnlyTodo,
+  updateToDoDay,
 };

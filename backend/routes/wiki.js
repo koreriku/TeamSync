@@ -9,8 +9,8 @@ router.post("/", async (req, res) => {
   const data = req.body;
   query = {
     text: `
-      INSERT INTO wiki (update_date, registration_date, staff, title, detail, category, comment, image, color, files)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+      INSERT INTO wiki (update_date, registration_date, staff, title, detail, category, comment, image, color, files, department)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id;
     `,
     values: [
       data.update_date,
@@ -23,6 +23,7 @@ router.post("/", async (req, res) => {
       data.image,
       data.color,
       data.files,
+      data.department,
     ],
   };
   await throwQuery(res, query);
@@ -31,6 +32,15 @@ router.post("/", async (req, res) => {
 router.get("/", async (req, res) => {
   query = {
     text: `SELECT * FROM wiki ORDER BY id desc`,
+  };
+  await throwQuery(res, query);
+});
+
+router.get("/id", async (req, res) => {
+  const id = req.query.id;
+  query = {
+    text: `SELECT * FROM wiki WHERE id = $1`,
+    values: [id],
   };
   await throwQuery(res, query);
 });
@@ -57,7 +67,8 @@ router.put("/", async (req, res) => {
       staff = $7,
       image = $8,
       color = $9,
-      files = $10
+      files = $10,
+      department = $11
       WHERE id = $1;  
       `,
     values: [
@@ -71,6 +82,7 @@ router.put("/", async (req, res) => {
       data.image,
       data.color,
       data.files,
+      data.department,
     ],
   };
   await throwQuery(res, query);

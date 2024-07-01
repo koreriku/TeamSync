@@ -1,6 +1,6 @@
 <template>
   <v-dialog v-model="isOpenedWikiDetailDialog" max-width="1250px">
-    <v-card>
+    <v-card :class="{ 'dark-scroll-bar': baseThemeColor == 'dark' }">
       <v-card-text>
         <v-card
           class="mb-5 title"
@@ -12,6 +12,19 @@
               {{ selectedWiki.update_date.substr(0, 10) }}
             </div>
             <div>
+              <v-btn
+                icon
+                color="grey"
+                @click="
+                  getLink(`${baseURL}/TeamSync/?wiki_id=${selectedWiki.id}`)
+                "
+                class="mr-3 mb-2"
+              >
+                <v-icon> mdi-link</v-icon>
+                <v-tooltip activator="parent" location="bottom"
+                  >URLをクリップボードにコピー</v-tooltip
+                ></v-btn
+              >
               <v-btn
                 icon
                 color="blue"
@@ -69,6 +82,9 @@
             >
           </div>
           <div class="staff">
+            <span class="mr-2" :style="{ color: selectedWiki.color }">{{
+              selectedWiki.department_name
+            }}</span>
             <v-avatar
               class="mr-2 mb-1"
               size="small"
@@ -196,7 +212,7 @@ import {
   selectedWiki,
   putWikiComment,
 } from "../../../store/wiki.js";
-import { comment, resetComment } from "../../../store/work.js";
+import { comment, resetComment, getLink } from "../../../store/work.js";
 import { participatingProjectIds } from "../../../store/project.js";
 import {
   convertArrayToText,
@@ -206,6 +222,7 @@ import {
   newAttachedFile,
   deleteContent,
   deleteTarget,
+  baseThemeColor,
 } from "../../../store/common.js";
 import { userInfo } from "../../../store/user.js";
 import wikiRegistrationDialog from "./wikiRegistrationDialog.vue";

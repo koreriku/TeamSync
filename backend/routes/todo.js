@@ -9,8 +9,8 @@ router.post("/", async (req, res) => {
   const data = req.body;
   query = {
     text: `
-      INSERT INTO todo (day, work_id, user_id, target_progress, required_time, current_progress, overtime)
-      VALUES ($1, $2, $3, $4, $5, $6, $7);
+      INSERT INTO todo (day, work_id, user_id, target_progress, required_time, current_progress, overtime, project_no, se_daily_report_process, title)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id;
     `,
     values: [
       data.day,
@@ -20,6 +20,9 @@ router.post("/", async (req, res) => {
       data.required_time,
       data.current_progress,
       data.overtime,
+      data.project_no,
+      data.se_daily_report_process,
+      data.title,
     ],
   };
   await throwQuery(res, query);
@@ -37,11 +40,12 @@ router.get("/dayAndUserId", async (req, res) => {
   }
   query = {
     text: `SELECT * FROM works INNER JOIN
-           (SELECT id as todo_id,day,work_id as work_id_of_todo,user_id,target_progress,required_time,current_progress,overtime FROM todo
+          (SELECT id as project_id,title as project_name FROM projects) project 
+          ON project.project_id = works.project RIGHT JOIN
+           (SELECT id as todo_id,day,work_id as work_id_of_todo,user_id,target_progress,required_time,current_progress,overtime, 
+            title as todo_title, project_no as todo_project_no,se_daily_report_process as todo_se_daily_report_process FROM todo
            WHERE ${whereDay} AND user_id in ( ${userId} )) todo 
-           ON works.id = todo.work_id_of_todo INNER JOIN
-           (SELECT id as project_id,title as project_name FROM projects) project 
-           ON project.project_id = works.project
+           ON works.id = todo.work_id_of_todo 
            order by project_id
            `,
   };
@@ -67,11 +71,12 @@ router.get("/betweenDayAndUserId", async (req, res) => {
   query = {
     text: `
            SELECT * FROM works INNER JOIN
-           (SELECT * FROM todo
-            WHERE day BETWEEN $1 AND $2 AND user_id = $3) todo 
-           ON works.id = todo.work_id INNER JOIN
            (SELECT id as project_id,project_no FROM projects) project 
-           ON project.project_id = works.project
+           ON project.project_id = works.project RIGHT JOIN
+           (SELECT id as todo_id,day,work_id as work_id_of_todo,user_id,target_progress,required_time,current_progress,overtime, 
+            title as todo_title, project_no as todo_project_no,se_daily_report_process as todo_se_daily_report_process FROM todo
+            WHERE day BETWEEN $1 AND $2 AND user_id = $3) todo 
+           ON works.id = todo.work_id_of_todo 
            order by day
             `,
     values: [fromDay, toDay, userId],
@@ -97,7 +102,10 @@ router.put("/", async (req, res) => {
       target_progress = $3,
       required_time = $4,
       current_progress = $5, 
-      overtime = $6 
+      overtime = $6, 
+      project_no = $7, 
+      se_daily_report_process = $8, 
+      title = $9 
       WHERE id = $1;  
       `,
     values: [
@@ -107,6 +115,9 @@ router.put("/", async (req, res) => {
       data.required_time,
       data.current_progress,
       data.overtime,
+      data.project_no,
+      data.se_daily_report_process,
+      data.title,
     ],
   };
   await throwQuery(res, query);

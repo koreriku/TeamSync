@@ -3,14 +3,7 @@
     <v-app>
       <v-app-bar app color="primary">
         <v-app-bar-title @click="judgmentLogin('/')">
-          <span class="title">
-            <img
-              src="../public/typescript.png"
-              class="mr-2"
-              style="width: 50px"
-            />
-            <h1 class="text-h6">TeamSync</h1></span
-          ></v-app-bar-title
+          <span class="title"> TeamSync</span></v-app-bar-title
         >
 
         <v-spacer></v-spacer>
@@ -27,7 +20,10 @@
               location="end"
               :close-on-content-click="false"
             >
-              <v-card style="width: 400px; max-height: 500px">
+              <v-card
+                style="width: 400px; max-height: 500px"
+                :class="{ 'dark-scroll-bar': baseThemeColor == 'dark' }"
+              >
                 <v-card-text>
                   <v-table>
                     <v-list>
@@ -127,25 +123,77 @@
             >アカウント登録</v-tooltip
           ></v-btn
         >
-        <span v-else class="point-cursor" @click="goTo('/userRegister')">
-          <v-avatar class="mr-2 mb-1" size="small" v-if="userInfo.icon">
-            <v-img
-              :src="baseURL + '/public/uploads/' + userInfo.icon"
-              :alt="userInfo.name"
-            ></v-img
-            ><v-tooltip activator="parent" location="bottom"
-              >アカウント編集（{{ userInfo.name }}）</v-tooltip
-            ></v-avatar
-          >
-          <v-avatar class="mr-2 mb-1" size="small" v-else
-            ><span style="color: white">{{
-              String(userInfo.name).charAt(0)
-            }}</span
-            ><v-tooltip activator="parent" location="bottom"
-              >アカウント編集（{{ userInfo.name }}）</v-tooltip
-            ></v-avatar
-          >
-        </span>
+        <v-menu v-else :close-on-content-click="false">
+          <template v-slot:activator="{ props }">
+            <span class="point-cursor" v-bind="props">
+              <v-avatar class="mr-2 mb-1" size="small" v-if="userInfo.icon">
+                <v-img
+                  :src="baseURL + '/public/uploads/' + userInfo.icon"
+                  :alt="userInfo.name"
+                ></v-img
+                ><v-tooltip activator="parent" location="bottom"
+                  >アカウント設定（{{ userInfo.name }}）</v-tooltip
+                ></v-avatar
+              >
+              <v-avatar class="mr-2 mb-1" size="small" v-else
+                ><span style="color: white">{{
+                  String(userInfo.name).charAt(0)
+                }}</span
+                ><v-tooltip activator="parent" location="bottom"
+                  >アカウント設定（{{ userInfo.name }}）</v-tooltip
+                ></v-avatar
+              >
+            </span>
+          </template>
+
+          <v-list width="300">
+            <v-list-item @click="goTo('/userRegister')">
+              <v-list-item-title>アカウント編集</v-list-item-title>
+            </v-list-item>
+            <v-list-group value="Admin">
+              <template v-slot:activator="{ props }">
+                <v-list-item v-bind="props" title="テーマカラー"></v-list-item>
+              </template>
+
+              <v-card>
+                <v-card-text>
+                  <v-row>
+                    <v-col cols="3" v-for="item of baseThemeColors">
+                      <v-btn
+                        icon
+                        :color="item.btnColor"
+                        @click="
+                          baseThemeColor = item.theme;
+                          changeTheme();
+                        "
+                      >
+                        <v-tooltip activator="parent" location="bottom">{{
+                          item.name
+                        }}</v-tooltip></v-btn
+                      >
+                    </v-col>
+                  </v-row>
+                  <v-row>
+                    <v-col cols="3" v-for="item of themeColors">
+                      <v-btn
+                        icon
+                        :color="item.btnColor"
+                        @click="
+                          themeColor = item.theme;
+                          changeTheme();
+                        "
+                      >
+                        <v-tooltip activator="parent" location="bottom">{{
+                          item.name
+                        }}</v-tooltip></v-btn
+                      >
+                    </v-col>
+                  </v-row>
+                </v-card-text>
+              </v-card>
+            </v-list-group>
+          </v-list>
+        </v-menu>
       </v-app-bar>
       <v-navigation-drawer v-model="drawer" fixed temporary>
         <v-list nav dense>
@@ -227,8 +275,8 @@
         <router-view></router-view>
       </v-main>
 
-      <v-footer class="custom-footer" app>
-        <div class="text-center my-2">
+      <v-footer class="custom-footer mt-10">
+        <div class="text-center">
           2023<span v-if="2023 != year"> - {{ year }}</span> TeamSync
         </div></v-footer
       >
@@ -240,6 +288,7 @@
 <script setup>
 import { useRoute, useRouter } from "vue-router";
 import { ref } from "vue";
+import { useTheme } from "vuetify";
 import {
   currentProject,
   currentProjectUserIds,
@@ -257,12 +306,19 @@ import {
   notificationsCount,
   deleteNotification,
 } from "./store/notification.js";
+import { getWikiWithId, isOpenedWikiDetailDialog } from "./store/wiki.js";
 import { userInfo, inputUserInfo } from "./store/user.js";
-import { baseURL, snackbar } from "./store/common.js";
+import {
+  baseURL,
+  snackbar,
+  baseThemeColor,
+  themeColor,
+} from "./store/common.js";
 import workDetailDialog from "./components/dialogs/workDetailDialog.vue";
 
 const route = useRoute();
 const router = useRouter();
+const theme = useTheme();
 
 const year = new Date().getFullYear();
 
@@ -313,11 +369,59 @@ const logout = () => {
 const drawer = ref(false);
 
 const clickNotification = async (item) => {
-  await getWorkWithId(item.work_id);
-  isWorkDetailsDialogOpen.value = true;
+  if (item.is_wiki) {
+    await getWikiWithId(item.work_id);
+    isOpenedWikiDetailDialog.value = true;
+  } else {
+    await getWorkWithId(item.work_id);
+    isWorkDetailsDialogOpen.value = true;
+  }
   item.is_read = true;
   putNotificationIsRead(item.id);
 };
+
+const baseThemeColors = [
+  { theme: "light", name: "ライト", btnColor: "white" },
+  { theme: "dark", name: "ダーク", btnColor: "black" },
+];
+const themeColors = [
+  { theme: "blue", name: "ブルー", btnColor: "#2196F3" },
+  { theme: "cyan", name: "シアン", btnColor: "#00BCD4" },
+  { theme: "teal", name: "ティール", btnColor: "#009688" },
+  { theme: "purple", name: "パープル", btnColor: "#9C27B0" },
+  { theme: "deepPurple", name: "ディープパープル", btnColor: "#673AB7" },
+  { theme: "pink", name: "ピンク", btnColor: "#E91E63" },
+  { theme: "orange", name: "オレンジ", btnColor: "#FF9800" },
+  { theme: "green", name: "グリーン", btnColor: "#4CAF50" },
+  { theme: "lightGreen", name: "ライトグリーン", btnColor: "#8BC34A" },
+  { theme: "lime", name: "ライム", btnColor: "#CDDC39" },
+  { theme: "brown", name: "ブラウン", btnColor: "#795548" },
+  { theme: "blueGrey", name: "ブルーグレー", btnColor: "#607D8B" },
+];
+const changeTheme = () => {
+  let selectedTheme = theme.themes.value[themeColor.value].colors;
+  if (baseThemeColor.value == "light") {
+    selectedTheme.background = "#FFFFFF";
+    selectedTheme.surface = "#FFFFFF";
+    selectedTheme["grey-lighten-4"] = "#F5F5F5";
+    theme.themes.value[themeColor.value].dark = false;
+  } else {
+    selectedTheme.background = "#000000";
+    selectedTheme.surface = "#212121";
+    selectedTheme["grey-lighten-4"] = "#424242";
+    theme.themes.value[themeColor.value].dark = true;
+  }
+  theme.global.name.value = themeColor.value;
+  localStorage.setItem("themeColor", themeColor.value);
+  localStorage.setItem("baseThemeColor", baseThemeColor.value);
+};
+if (localStorage.getItem("themeColor")) {
+  themeColor.value = localStorage.getItem("themeColor");
+}
+if (localStorage.getItem("baseThemeColor")) {
+  baseThemeColor.value = localStorage.getItem("baseThemeColor");
+}
+changeTheme();
 </script>
 
 <style scoped>
@@ -330,10 +434,14 @@ const clickNotification = async (item) => {
   margin-top: 60px;
 }
 .title {
-  display: flex;
   align-items: center;
-  width: 100px;
   cursor: pointer;
+  border-bottom: none;
+  font-family: "Shantell Sans", cursive;
+  height: 50px;
+  font-weight: 100;
+  font-size: 1.5rem;
+  font-style: normal;
 }
 .toolbar {
   display: none;
@@ -344,7 +452,6 @@ const clickNotification = async (item) => {
 .custom-footer {
   position: static !important;
   border-top: 1px solid #ccc;
-  height: 10px;
 }
 .nav {
   display: block;

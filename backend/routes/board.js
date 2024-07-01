@@ -6,12 +6,31 @@ const router = express.Router();
 let query = {};
 
 router.get("/", async (req, res) => {
-  const id = req.query.id;
+  const department_id = req.query.department_id;
   query = {
-    text: `SELECT * FROM board WHERE id = $1 ORDER BY id`,
-    values: [id],
+    text: `SELECT * FROM board WHERE department = $1`,
+    values: [department_id],
   };
-  await throwQuery(res, query);
+  await pool
+    .query(query)
+    .then(async (result) => {
+      if (result.rows.length > 0) {
+        res.send(result.rows);
+      } else {
+        query = {
+          text: `
+          INSERT INTO board (content, department)
+          VALUES ($1, $2) RETURNING id, content, department;
+        `,
+          values: ["", department_id],
+        };
+        await throwQuery(res, query);
+      }
+    })
+    .catch((e) => {
+      console.log(e.stack);
+      res.status(500).send("An error occurred");
+    });
 });
 
 router.put("/", async (req, res) => {
@@ -20,10 +39,10 @@ router.put("/", async (req, res) => {
     text: `
         UPDATE board
         SET content = $2 
-        WHERE id = $1
-        RETURNING id, content;
+        WHERE department = $1
+        RETURNING id, content, department;
         `,
-    values: [data.id, data.content],
+    values: [data.department, data.content],
   };
 
   await throwQuery(res, query);

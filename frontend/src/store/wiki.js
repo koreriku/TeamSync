@@ -1,5 +1,16 @@
 import { ref } from "vue";
 import { convertCategoryIdToName } from "./work.js";
+import { users, userInfo } from "./user.js";
+import {
+  setEditNotification,
+  addNotification,
+  deleteNotificationWithWorkID,
+} from "./notification.js";
+import {
+  departments,
+  getCurrentDateTime,
+  convertDepartmentIdToName,
+} from "./common.js";
 import axios from "axios";
 
 const wikiBASE_URL = "http://localhost:3000/wiki";
@@ -17,10 +28,13 @@ const selectedWiki = ref({
   registration_date: "",
   staff: {},
   category: [],
+  categoryName: [],
   comment: [],
   image: "",
   color: "#000000",
   files: [],
+  department: 0,
+  department_name: null,
 });
 
 const editedWiki = ref({
@@ -36,6 +50,8 @@ const editedWiki = ref({
   image: "",
   color: "#000000",
   files: [],
+  department: 0,
+  department_name: null,
 });
 
 const resetWiki = () => {
@@ -52,6 +68,8 @@ const resetWiki = () => {
     image: "",
     color: "#000000",
     files: [],
+    department: 0,
+    department_name: null,
   };
   editedWiki.value = {
     id: 0,
@@ -66,6 +84,8 @@ const resetWiki = () => {
     image: "",
     color: "#000000",
     files: [],
+    department: 0,
+    department_name: null,
   };
 };
 
@@ -74,17 +94,43 @@ const getWiki = async () => {
   await axios.get(wikiBASE_URL).then((res) => {
     if (res.data.length == 0) return;
     for (const wiki of res.data) {
-      if (wiki.category.length > 0) {
-        wiki.categoryName = convertCategoryIdToName(wiki.category);
-      }
+      wiki.department_name = convertDepartmentIdToName(wiki.department);
+      wiki.categoryName = convertCategoryIdToName(wiki.category);
     }
     wikis.value = res.data;
     searchWiki();
   });
 };
 
+const getWikiWithId = async (id) => {
+  await axios.get(wikiBASE_URL + "/id?id=" + id).then((res) => {
+    res.data[0].department_name = convertDepartmentIdToName(
+      res.data[0].department
+    );
+    res.data[0].categoryName = convertCategoryIdToName(res.data[0].category);
+    selectedWiki.value = res.data[0];
+    return selectedWiki.value;
+  });
+};
+
 const postWiki = async () => {
-  await axios.post(wikiBASE_URL, editedWiki.value);
+  await axios.post(wikiBASE_URL, editedWiki.value).then(async (res) => {
+    for (const staff of users.value) {
+      if (staff.id == userInfo.value.id) {
+        continue;
+      }
+      setEditNotification(
+        `Wiki「${editedWiki.value.title}」が投稿されました。`,
+        "",
+        res.data[0].id,
+        staff.id,
+        false,
+        getCurrentDateTime(),
+        true
+      );
+      await addNotification();
+    }
+  });
   await getWiki();
 };
 
@@ -94,10 +140,26 @@ const putWikiImage = async (wiki) => {
 
 const putWiki = async () => {
   await axios.put(wikiBASE_URL, editedWiki.value);
+  for (const staff of users.value) {
+    if (staff.id == userInfo.value.id) {
+      continue;
+    }
+    setEditNotification(
+      `Wiki「${editedWiki.value.title}」が更新されました。`,
+      "",
+      editedWiki.value.id,
+      staff.id,
+      false,
+      getCurrentDateTime(),
+      true
+    );
+    await addNotification();
+  }
 };
 
 const deleteWiki = async (id) => {
   await axios.delete(wikiBASE_URL + "?id=" + id);
+  await deleteNotificationWithWorkID(id, true);
 };
 
 const putWikiComment = async () => {
@@ -106,11 +168,14 @@ const putWikiComment = async () => {
 
 const searchWikiCondition = ref({
   category: "",
+  department_name: "",
   ward: "",
 });
 const resetSearchedWikis = () => {
   searchWikiCondition.value = {
     category: "",
+    department_name: "",
+    ward: "",
   };
 };
 const searchedWikis = ref([]);
@@ -120,7 +185,11 @@ const searchWiki = () => {
   isSearchedWiki.value = true;
   const useSearchWikiConditions = [];
   let judge = false;
-  if (!searchWikiCondition.value.category && !searchWikiCondition.value.word) {
+  if (
+    !searchWikiCondition.value.category &&
+    !searchWikiCondition.value.department_name &&
+    !searchWikiCondition.value.word
+  ) {
     isSearchedWiki.value = false;
     searchedWikis.value = wikis.value.concat();
     return;
@@ -143,6 +212,13 @@ const searchWiki = () => {
           }
         }
         if (judgeCategory) {
+          judge = true;
+        } else {
+          judge = false;
+          break;
+        }
+      } else if (key == "department_name") {
+        if (wiki.department_name == searchWikiCondition.value.department_name) {
           judge = true;
         } else {
           judge = false;
@@ -189,4 +265,5 @@ export {
   resetSearchedWikis,
   resetWiki,
   putWikiImage,
+  getWikiWithId,
 };

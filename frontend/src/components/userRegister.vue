@@ -13,10 +13,7 @@
               required
               prepend-inner-icon-color="red"
               ><template v-slot:label>
-                <v-icon slot="prependIcon" large color="red"
-                  >mdi-asterisk</v-icon
-                >
-                名前
+                名前<span class="red-asterisk ml-1">*</span>
               </template></v-text-field
             >
             <v-text-field
@@ -24,11 +21,20 @@
               required
               prepend-inner-icon-color="red"
               ><template v-slot:label>
-                <v-icon slot="prependIcon" large color="red"
-                  >mdi-asterisk</v-icon
-                >
-                社員番号
+                社員番号<span class="red-asterisk ml-1">*</span>
               </template></v-text-field
+            >
+
+            <v-select
+              v-model="inputUserInfo.department_name"
+              :items="
+                departmentsForInput
+                  .filter((item) => item.name != '--')
+                  .map((item) => item.name)
+              "
+              ><template v-slot:label>
+                部署 <span class="red-asterisk ml-1">*</span>
+              </template></v-select
             >
             <v-text-field
               v-model="inputUserInfo.birthday"
@@ -41,10 +47,7 @@
               :rules="emailRules"
               type="email"
               ><template v-slot:label>
-                <v-icon slot="prependIcon" large color="red"
-                  >mdi-asterisk</v-icon
-                >
-                メールアドレス
+                メールアドレス<span class="red-asterisk ml-1">*</span>
               </template></v-text-field
             >
             <v-text-field
@@ -52,10 +55,7 @@
               type="password"
               required
               ><template v-slot:label>
-                <v-icon slot="prependIcon" large color="red"
-                  >mdi-asterisk</v-icon
-                >
-                パスワード
+                パスワード<span class="red-asterisk ml-1">*</span>
               </template></v-text-field
             >
             <v-text-field
@@ -65,10 +65,7 @@
               required
             >
               <template v-slot:label>
-                <v-icon slot="prependIcon" large color="red"
-                  >mdi-asterisk</v-icon
-                >
-                パスワード確認
+                パスワード確認<span class="red-asterisk ml-1">*</span>
               </template>
             </v-text-field>
             <v-file-input
@@ -76,16 +73,11 @@
               accept="image/*"
               label="アイコン画像"
             ></v-file-input>
-
-            <v-alert v-if="!passwordMatch" type="error" class="my-2">
-              パスワードとパスワード確認が一致しません
-            </v-alert>
-            <v-alert v-if="requiredIsNull" type="error" class="my-2">
-              必須項目が入力されていません
-            </v-alert>
-            <v-alert v-if="registeredEmail" type="error" class="my-2">
-              メールアドレスは既に登録されています。
-            </v-alert>
+            <p class="mb-5 text-medium-emphasis" v-if="inputUserInfo.icon">
+              ※現在、アイコンに「{{
+                inputUserInfo.icon.replace(/^(\d+)_/, "")
+              }}」が設定されています。
+            </p>
 
             <div class="text-center">
               <v-btn icon color="yellow" @click="saveUser" v-if="!userInfo.id">
@@ -106,6 +98,8 @@
       </v-col>
     </v-row>
   </v-container>
+  <workDetailDialog />
+  <wikiDetailDialog />
 </template>
 
 <script setup>
@@ -120,7 +114,16 @@ import {
   previousFileName,
 } from "../store/user.js";
 import { useRouter } from "vue-router";
-import { emailRules, newAttachedFiles } from "../store/common.js";
+import {
+  emailRules,
+  newAttachedFiles,
+  displaySnackbar,
+  departmentsForInput,
+  getDepartments,
+  convertDepartmentNameToId,
+} from "../store/common.js";
+import wikiDetailDialog from "./dialogs/wiki/wikiDetailDialog.vue";
+import workDetailDialog from "./dialogs/workDetailDialog.vue";
 
 const router = useRouter();
 
@@ -128,6 +131,7 @@ userInfo.value.password = "";
 inputUserInfo.value = Object.assign({}, userInfo.value);
 previousFileName.value = userInfo.value.icon;
 onBeforeMount(async () => {
+  await getDepartments();
   await getUser(0);
   newAttachedFiles.value = [];
 });
@@ -136,7 +140,6 @@ const passwordConfirmation = ref("");
 
 const passwordMatch = ref(true); // パスワード一致の初期値
 const requiredIsNull = ref(false);
-const registeredEmail = ref(false);
 
 const validateName = () => {
   if (
@@ -147,10 +150,13 @@ const validateName = () => {
     inputUserInfo.value.password.replace(/ /g, "") &&
     inputUserInfo.value.password.replace(/　/g, "") &&
     inputUserInfo.value.email.replace(/ /g, "") &&
-    inputUserInfo.value.email.replace(/　/g, "")
+    inputUserInfo.value.email.replace(/　/g, "") &&
+    inputUserInfo.value.department_name.replace(/ /g, "") &&
+    inputUserInfo.value.department_name.replace(/　/g, "")
   ) {
     requiredIsNull.value = false;
   } else {
+    displaySnackbar("red", "必須項目が入力されていません");
     requiredIsNull.value = true;
   }
 };
@@ -166,6 +172,7 @@ const validatePasswordMatch = () => {
 const saveUser = async () => {
   validatePasswordMatch();
   if (!passwordMatch.value) {
+    displaySnackbar("red", "パスワードとパスワード確認が一致しません");
     return;
   }
   validateName();
@@ -175,12 +182,26 @@ const saveUser = async () => {
   if (!userInfo.value.id) {
     for (const user of users.value) {
       if (inputUserInfo.value.email == user.email) {
-        registeredEmail.value = true;
+        displaySnackbar("red", "メールアドレスは既に登録されています。");
+        return;
+      }
+      if (inputUserInfo.value.name == user.name) {
+        displaySnackbar("red", "名前は既に登録されています。");
+        return;
+      }
+      if (inputUserInfo.value.employee_no == user.employee_no) {
+        displaySnackbar("red", "社員番号は既に登録されています。");
         return;
       }
     }
+    inputUserInfo.value.department = convertDepartmentNameToId(
+      inputUserInfo.value.department_name
+    );
     await postUser();
   } else {
+    inputUserInfo.value.department = convertDepartmentNameToId(
+      inputUserInfo.value.department_name
+    );
     await putUser();
   }
   router.push("/");

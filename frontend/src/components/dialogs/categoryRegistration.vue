@@ -1,96 +1,128 @@
 <template>
-  <v-dialog v-model="isCategoryRegistrationDialog" max-width="400px">
-    <v-card>
+  <v-dialog v-model="isCategoryRegistrationDialog" max-width="800px">
+    <v-card :class="{ 'dark-scroll-bar': baseThemeColor == 'dark' }">
       <v-card-title> 新しいカテゴリーを追加 </v-card-title>
       <v-card-text>
-        <v-text-field
-          v-model="newCategory.name"
-          label="カテゴリー名"
-          @keyup.enter="
-            postCategory();
-            newCategory.name = '';
-            isCategoryRegistrationDialog = false;
-          "
-          required
-        ></v-text-field>
-
-        <div class="text-center">
-          <v-btn icon color="yellow" @click="saveCategory">
-            <v-icon>mdi-check</v-icon>
-            <v-tooltip activator="parent" location="bottom"
-              >登録</v-tooltip
-            ></v-btn
+        <div class="d-flex">
+          <v-text-field
+            v-model="newCategory.name"
+            label="カテゴリー名"
+            class="mr-3"
+            variant="outlined"
+            required
+          ></v-text-field>
+          <v-select
+            v-model="newCategory.project_name"
+            variant="outlined"
+            class="mr-3"
+            :items="
+              projects
+                .filter((item) => item.staff_ids.includes(userInfo.id))
+                .map((item) => `${item.title}`)
+            "
+            multiple
+            chips
+            style="max-width: 350px"
+            ><template v-slot:label>
+              プロジェクト <span class="red-asterisk ml-1">*</span>
+            </template></v-select
           >
+          <div class="text-center">
+            <v-btn icon color="yellow" @click="saveCategory">
+              <v-icon>mdi-check</v-icon>
+              <v-tooltip activator="parent" location="bottom"
+                >登録</v-tooltip
+              ></v-btn
+            >
+          </div>
         </div>
-
         <v-table>
-          <v-list>
-            <v-list-subheader
-              ><v-chip
-                v-if="!isEdited"
-                prepend-icon="mdi-sort"
-                @click="isEdited = !isEdited"
-                >並べ替え</v-chip
-              ><v-chip
-                v-else
-                prepend-icon="mdi-pencil"
-                @click="isEdited = !isEdited"
-                >編集</v-chip
-              ></v-list-subheader
-            >
-            <v-list-item
+          <div class="mb-3">
+            <v-chip
               v-if="!isEdited"
-              v-for="(item, i) in categories"
-              :key="i"
-              :value="item"
-              :active="false"
-              style="border-bottom: 1px solid #e0e0e0"
-              @click="inputDepartment(item)"
-            >
-              <v-list-item-title
-                :style="{
-                  color: selectedItem.name === item.name ? '#2196F3' : '',
-                }"
-                >{{ item.name }}</v-list-item-title
-              >
-            </v-list-item>
-            <v-list-item
+              prepend-icon="mdi-sort"
+              @click="isEdited = !isEdited"
+              >並べ替え</v-chip
+            ><v-chip
               v-else
-              v-for="(item, i) in categories"
-              :value="item"
-              :active="false"
-              style="border-bottom: 1px solid #e0e0e0"
+              prepend-icon="mdi-pencil"
+              @click="isEdited = !isEdited"
+              >編集</v-chip
             >
-              <v-list-item-title class="d-flex"
-                ><v-text-field
-                  variant="outlined"
-                  v-model="item.name"
-                  density="compact"
-                  single-line
-                  hide-details
-                  class="mr-2"
-                ></v-text-field>
-                <v-btn
-                  icon
-                  color="blue"
-                  class="mr-2"
-                  size="small"
-                  @click="putCategory(item)"
-                >
-                  <v-icon>mdi-check</v-icon>
-                  <v-tooltip activator="parent" location="bottom"
-                    >登録</v-tooltip
-                  ></v-btn
-                >
-                <v-btn icon color="red" size="small" @click="deleteItem(item)">
-                  <v-icon>mdi-delete</v-icon>
-                  <v-tooltip activator="parent" location="bottom"
-                    >削除</v-tooltip
-                  ></v-btn
-                >
-              </v-list-item-title>
-            </v-list-item>
-          </v-list>
+          </div>
+          <div
+            v-if="!isEdited"
+            v-for="(item, i) in categories"
+            :key="i"
+            :value="item"
+            :active="false"
+            @click="inputDepartment(item)"
+          >
+            <div
+              class="my-3 point-cursor tr-data"
+              :style="{
+                color: selectedItem.name === item.name ? '#2196F3' : '',
+              }"
+            >
+              {{ item.name }}
+            </div>
+            <v-divider class="mt-2"></v-divider>
+          </div>
+          <div
+            v-else
+            v-for="(item, i) in categories"
+            :value="item"
+            :active="false"
+          >
+            <div class="d-flex">
+              <v-text-field
+                variant="outlined"
+                v-model="item.name"
+                density="compact"
+                single-line
+                hide-details
+                class="mr-2"
+              ></v-text-field>
+              <v-select
+                v-model="item.project_name"
+                single-line
+                hide-details
+                variant="outlined"
+                density="compact"
+                class="mr-2"
+                :items="
+                  projects
+                    .filter((item) => item.staff_ids.includes(userInfo.id))
+                    .map((item) => `${item.title}`)
+                "
+                multiple
+                chips
+                style="max-width: 350px"
+                ><template v-slot:label>
+                  プロジェクト <span class="red-asterisk ml-1">*</span>
+                </template></v-select
+              >
+              <v-btn
+                icon
+                color="blue"
+                class="mr-2"
+                size="small"
+                @click="putCategory(item)"
+              >
+                <v-icon>mdi-check</v-icon>
+                <v-tooltip activator="parent" location="bottom"
+                  >登録</v-tooltip
+                ></v-btn
+              >
+              <v-btn icon color="red" size="small" @click="deleteItem(item)">
+                <v-icon>mdi-delete</v-icon>
+                <v-tooltip activator="parent" location="bottom"
+                  >削除</v-tooltip
+                ></v-btn
+              >
+            </div>
+            <v-divider class="my-2"></v-divider>
+          </div>
         </v-table>
       </v-card-text>
     </v-card>
@@ -110,6 +142,9 @@ import {
   putCategory,
   deleteCategory,
 } from "../../store/work.js";
+import { displaySnackbar, baseThemeColor } from "../../store/common.js";
+import { projects } from "../../store/project.js";
+import { userInfo } from "../../store/user.js";
 
 const props = defineProps({
   projectId: Number,
@@ -121,7 +156,11 @@ const isEdited = ref(false);
 selectedItem.value = {};
 puttedItem.value = {};
 const saveCategory = () => {
-  if (!newCategory.value.name) {
+  if (
+    newCategory.value.name == "" ||
+    newCategory.value.project_name.length == 0
+  ) {
+    displaySnackbar("red", "必須項目が入力されていません。");
     return;
   }
   if (props.projectId == 0) {
@@ -130,6 +169,8 @@ const saveCategory = () => {
     postCategory();
   }
   newCategory.value.name = "";
+  newCategory.value.project_name = [];
+  newCategory.value.project_id = [];
   isCategoryRegistrationDialog.value = false;
 };
 

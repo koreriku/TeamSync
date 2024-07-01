@@ -27,8 +27,8 @@ router.post("/", async (req, res) => {
   // パスワードをハッシュ化
   data.password = await bcrypt.hash(data.password, 10);
   query = {
-    text: `INSERT INTO users (name, birthday, email, password, icon, employee_no) 
-    VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, employee_no, birthday,email,password,icon,todo,memo,display_todo;`,
+    text: `INSERT INTO users (name, birthday, email, password, icon, employee_no,department) 
+    VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name, employee_no, birthday,email,password,icon,todo,memo,display_todo,department;`,
     values: [
       data.name,
       data.birthday,
@@ -36,6 +36,7 @@ router.post("/", async (req, res) => {
       data.password,
       data.icon,
       data.employee_no,
+      data.department,
     ],
   };
   await throwQuery(res, query);
@@ -48,9 +49,9 @@ router.put("/", async (req, res) => {
   data.password = await bcrypt.hash(data.password, 10);
   query = {
     text: `UPDATE users
-    SET name = $2, birthday = $3, email = $4, password = $5, icon = $6, todo = $7, memo = $8, display_todo = $9, employee_no = $10
+    SET name = $2, birthday = $3, email = $4, password = $5, icon = $6, todo = $7, memo = $8, display_todo = $9, employee_no = $10, department = $11
     WHERE id = $1
-    RETURNING id, name, birthday,email,password,icon,todo,memo,display_todo,employee_no;`,
+    RETURNING id, name, birthday,email,password,icon,todo,memo,display_todo,employee_no,department;`,
     values: [
       data.id,
       data.name,
@@ -62,6 +63,7 @@ router.put("/", async (req, res) => {
       data.memo,
       data.display_todo,
       data.employee_no,
+      data.department,
     ],
   };
   await throwQuery(res, query);

@@ -1,6 +1,6 @@
 <template>
   <v-dialog v-model="isWorkDetailsDialogOpen" max-width="1250px">
-    <v-card>
+    <v-card id="main" :class="{ 'dark-scroll-bar': baseThemeColor == 'dark' }">
       <v-card-text>
         <v-card class="mb-5">
           <v-card-text>
@@ -33,6 +33,19 @@
                 </p>
               </div>
               <div>
+                <v-btn
+                  icon
+                  color="grey"
+                  @click="
+                    getLink(`${baseURL}/TeamSync/?work_id=${selectedWork.id}`)
+                  "
+                  class="mr-3 mb-2"
+                >
+                  <v-icon> mdi-link</v-icon>
+                  <v-tooltip activator="parent" location="bottom"
+                    >URLをクリップボードにコピー</v-tooltip
+                  ></v-btn
+                >
                 <v-btn
                   icon
                   color="light-blue"
@@ -87,7 +100,7 @@
                           <v-btn
                             icon
                             color="blue"
-                            @click="addTodo(selectedWork)"
+                            @click="postTodo(selectedWork)"
                           >
                             <v-icon>mdi-check</v-icon>
                             <v-tooltip activator="parent" location="bottom"
@@ -134,7 +147,12 @@
                 >
                 <deleteDialog :content="deleteContent" :target="deleteTarget" />
 
-                <v-btn icon color="gray" @click="closeDetailsModal">
+                <v-btn
+                  icon
+                  color="gray"
+                  @click="closeDetailsModal"
+                  class="mb-2"
+                >
                   <v-icon>mdi-arrow-u-left-top</v-icon>
                   <v-tooltip activator="parent" location="bottom"
                     >閉じる</v-tooltip
@@ -329,6 +347,39 @@
             </v-row>
 
             <v-row
+              class="mb-2"
+              v-if="childrenWorks.length > 0 && !selectedWork.work_id"
+            >
+              <v-col cols="6" xs="6" sm="6" md="4" lg="4" xl="4" xxl="4">
+                <v-list-item prepend-icon="mdi-clock-start">
+                  <v-list-item-subtitle>総予定時間</v-list-item-subtitle>
+                  <v-list-item-title>{{
+                    selectedWork.gross_estimate_time
+                  }}</v-list-item-title>
+                </v-list-item>
+                <v-divider inset></v-divider>
+              </v-col>
+              <v-col cols="6" xs="6" sm="6" md="4" lg="4" xl="4" xxl="4">
+                <v-list-item prepend-icon="mdi-clock-end"
+                  ><v-list-item-subtitle>総実績時間</v-list-item-subtitle>
+                  <v-list-item-title>{{
+                    selectedWork.gross_actual_time
+                  }}</v-list-item-title></v-list-item
+                >
+                <v-divider inset></v-divider>
+              </v-col>
+              <v-col cols="12" xs="12" sm="12" md="4" lg="4" xl="4" xxl="4">
+                <v-list-item prepend-icon="mdi-call-made"
+                  ><v-list-item-subtitle>総進捗度</v-list-item-subtitle>
+                  <v-list-item-title
+                    >{{ selectedWork.gross_progress }}%</v-list-item-title
+                  ></v-list-item
+                >
+                <v-divider inset></v-divider>
+              </v-col>
+            </v-row>
+
+            <v-row
               v-if="
                 Array.isArray(selectedWork.files) &&
                 selectedWork.files.length > 0
@@ -366,19 +417,84 @@
             <div class="mr-5">
               <v-icon class="mr-3">mdi-car-child-seat</v-icon>子課題
             </div>
-            <v-text-field
+
+            <v-btn
               v-if="hiddenEditAndDeleteBtn()"
-              class="text-end"
-              style="max-width: 400px"
-              v-model="editWork.children_title"
-              prepend-icon="mdi-plus"
-              density="compact"
-              single-line
-              hide-details
-              variant="outlined"
-              label="タイトル名を入力して追加"
-              @keyup.enter="registerChildrenWork"
-            ></v-text-field>
+              icon
+              class="mr-3 mb-2 text-end"
+              size="small"
+            >
+              <v-menu
+                activator="parent"
+                location="start"
+                :close-on-content-click="false"
+              >
+                <v-card style="width: 350px">
+                  <v-card-title class="text-center">子課題を追加</v-card-title>
+                  <v-card-text>
+                    <v-text-field v-model="editWork.children_title"
+                      ><template v-slot:label>
+                        子課題タイトル <span class="red-asterisk ml-1">*</span>
+                      </template></v-text-field
+                    >
+
+                    <v-select
+                      v-model="editWork.stateName.name"
+                      :items="statuses.map((item) => item.name)"
+                      ><template v-slot:label>
+                        状況 <span class="red-asterisk ml-1">*</span>
+                      </template></v-select
+                    >
+                    <v-select
+                      v-model="editWork.seDailyReportProcessName"
+                      :items="
+                        seDailyReportProcesses.map(
+                          (item) => `${item.no}.${item.name}`
+                        )
+                      "
+                      ><template v-slot:label>
+                        SE日報工程 <span class="red-asterisk ml-1">*</span>
+                      </template></v-select
+                    >
+                    <div class="d-flex">
+                      <v-combobox
+                        v-model="editWork.staffsName"
+                        :items="projectUsers.map((item) => item.name)"
+                        label="担当者"
+                        multiple
+                        chips
+                        class="mr-2"
+                      ></v-combobox>
+
+                      <v-btn
+                        icon
+                        color="gray"
+                        size="small"
+                        class="mt-2"
+                        @click="pushMyself"
+                      >
+                        <v-icon>mdi-account</v-icon>
+                        <v-tooltip activator="parent" location="bottom"
+                          >自身を追加</v-tooltip
+                        ></v-btn
+                      >
+                    </div>
+                    <div class="text-center">
+                      <v-btn icon color="yellow" @click="registerChildrenWork">
+                        <v-icon>mdi-check</v-icon>
+                        <v-tooltip activator="parent" location="bottom"
+                          >登録</v-tooltip
+                        ></v-btn
+                      >
+                    </div>
+                  </v-card-text>
+                </v-card></v-menu
+              >
+              <v-icon>mdi-plus</v-icon>
+              <v-tooltip activator="parent" location="bottom"
+                >子課題を追加</v-tooltip
+              ></v-btn
+            >
           </v-card-title>
           <v-card-item v-if="childrenWorks.length > 0">
             <v-table>
@@ -396,12 +512,7 @@
                 <tr
                   v-for="item in childrenWorks"
                   :key="item.id"
-                  @click="
-                    previousChildrenWorkEstimateTime = item.estimate_time;
-                    previousChildrenWorkActualTime = item.actual_time;
-                    previousChildrenWorkProgress = item.progress;
-                    openChildrenWorkEditModal(item);
-                  "
+                  @click="openLinkDetailsModal(item)"
                   class="tr-data point-cursor"
                 >
                   <td>{{ item.children_title }}</td>
@@ -437,7 +548,63 @@
           </v-card-item>
         </v-card>
 
-        <childrenWorkEditDialog />
+        <v-card class="mt-5" v-else>
+          <v-card-title class="align-center mt-3">
+            <div class="mr-5">
+              <v-icon class="mr-3">mdi-account-child</v-icon>親課題
+            </div>
+          </v-card-title>
+          <v-card-item>
+            <v-table>
+              <thead>
+                <tr>
+                  <th class="text-left">タイトル</th>
+                  <th class="text-left">担当者</th>
+                  <th class="text-left">状況</th>
+                  <th class="text-left">予想時間</th>
+                  <th class="text-left">実績時間</th>
+                  <th class="text-left">進捗度</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  @click="openLinkDetailsModal(parentWork)"
+                  class="tr-data point-cursor"
+                >
+                  <td>{{ parentWork.title }}</td>
+                  <td>
+                    <span
+                      v-for="(user, index) of addIconBasedOnUserId(
+                        parentWork.staffs
+                      )"
+                      ><v-avatar
+                        class="mr-2 mb-1"
+                        size="x-small"
+                        v-if="user.icon"
+                      >
+                        <v-img
+                          :src="baseURL + '/public/uploads/' + user.icon"
+                          :alt="user.name"
+                        ></v-img
+                      ></v-avatar>
+                      <v-avatar class="mr-2 mb-1" size="x-small" v-else>{{
+                        String(user.name).charAt(0)
+                      }}</v-avatar>
+                      {{ user.name }}
+                      <span v-if="index != parentWork.staffs.length - 1">
+                        ,
+                      </span></span
+                    >
+                  </td>
+                  <td>{{ parentWork.stateName.name }}</td>
+                  <td>{{ parentWork.estimate_time }}</td>
+                  <td>{{ parentWork.actual_time }}</td>
+                  <td>{{ parentWork.progress }}%</td>
+                </tr>
+              </tbody>
+            </v-table>
+          </v-card-item>
+        </v-card>
 
         <v-row class="mt-5">
           <v-col lg="8" md="9" sm="10">
@@ -492,15 +659,18 @@
                   {{ comment.registration_date }}</v-list-item-subtitle
                 >
                 <div
-                  class="d-flex justify-space-between"
+                  class="d-flex justify-space-between comment mb-n5"
                   style="white-space: pre-wrap"
                 >
                   <div>
-                    <p>{{ comment.content }}</p>
+                    <p>
+                      <MarkDownViewer :source="comment.content" />
+                    </p>
                   </div>
                   <v-btn
                     v-if="comment.user == userInfo.name"
                     variant="plain"
+                    class="comment-delete"
                     @click="deleteComment(index)"
                     >削除</v-btn
                   >
@@ -531,7 +701,6 @@ import {
   getChildrenWork,
   getWork,
   childrenWorks,
-  isChildrenWorkEditDialogOpen,
   workRegistrationDialog,
   comment,
   resetComment,
@@ -548,9 +717,22 @@ import {
   resetEditedWork,
   previousWork,
   deadlineIsPasted,
+  getParentWork,
+  parentWork,
+  getLink,
+  getSeDailyReportProcess,
+  seDailyReportProcesses,
+  pushMyself,
+  convertSeDailyReportProcessNameToId,
+  convertStatusNameToId,
 } from "../../store/work.js";
-import { participatingProjectIds } from "../../store/project.js";
-import { editTodo, resetTodo, addTodo } from "../../store/todo.js";
+import { participatingProjectIds, projects } from "../../store/project.js";
+import {
+  editTodo,
+  resetTodo,
+  addTodo,
+  updateToDoDay,
+} from "../../store/todo.js";
 import {
   convertArrayToText,
   isDeleteDialogOpen,
@@ -559,6 +741,8 @@ import {
   newAttachedFile,
   markDownColor,
   omittedText,
+  displaySnackbar,
+  baseThemeColor,
 } from "../../store/common.js";
 import {
   userInfo,
@@ -566,6 +750,7 @@ import {
   convertUserNameToId,
   projectUsers,
   addIconBasedOnUserId,
+  getProjectUsers,
 } from "../../store/user.js";
 import {
   setEditNotification,
@@ -582,6 +767,19 @@ const deleteTarget = ref("");
 
 markDownColor.value = "#E0E0E0";
 
+onBeforeMount(async () => {
+  await getStatus(selectedWork.value.project);
+  await getSeDailyReportProcess();
+  if (route.path != "/work") {
+    for (const project of projects.value) {
+      if (project.id == selectedWork.value.project) {
+        getProjectUsers(project.staff_ids);
+        break;
+      }
+    }
+  }
+});
+
 const hiddenEditAndDeleteBtn = () => {
   if (
     route.path == "/todo" &&
@@ -596,11 +794,38 @@ const closeDetailsModal = () => {
   isWorkDetailsDialogOpen.value = false;
 };
 
+const requiredIsNull = ref(false);
+
+const validateName = () => {
+  if (
+    editWork.value.children_title.replace(/ /g, "") &&
+    editWork.value.children_title.replace(/　/g, "") &&
+    editWork.value.seDailyReportProcessName.replace(/ /g, "") &&
+    editWork.value.seDailyReportProcessName.replace(/　/g, "") &&
+    editWork.value.stateName.name.replace(/ /g, "") &&
+    editWork.value.stateName.name.replace(/　/g, "")
+  ) {
+    requiredIsNull.value = false;
+  } else {
+    requiredIsNull.value = true;
+  }
+};
+
 const registerChildrenWork = async () => {
+  validateName();
+  if (requiredIsNull.value) {
+    displaySnackbar("red", "必須項目が入力されていません。");
+    return;
+  }
   resetEditedWork();
-  console.log(selectedWork.value);
   editedWork.value.work_id = selectedWork.value.id;
   editedWork.value.children_title = editWork.value.children_title;
+  editedWork.value.state = convertStatusNameToId(editWork.value.stateName.name);
+  editedWork.value.se_daily_report_process =
+    convertSeDailyReportProcessNameToId(
+      editWork.value.seDailyReportProcessName
+    );
+  editedWork.value.staffs = convertUserNameToId(editWork.value.staffsName);
   editedWork.value.project = selectedWork.value.project;
   editedWork.value.title = selectedWork.value.title;
   editedWork.value.from = selectedWork.value.from;
@@ -608,20 +833,32 @@ const registerChildrenWork = async () => {
   editedWork.value.priority = selectedWork.value.priority;
   editedWork.value.version = selectedWork.value.version;
   editedWork.value.category = selectedWork.value.category;
+  editedWork.value.registered_staff = userInfo.value.id;
+  let now = getCurrentDateTime();
+  editedWork.value.registration_date = now;
+  editedWork.value.update_date = now;
   await postWork();
   await getWork();
   await getChildrenWork(selectedWork.value.id);
   editWork.value.children_title = "";
+  editWork.value.stateName.name = "";
+  editWork.value.seDailyReportProcessName = "";
+  editWork.value.staffsName = [];
 };
 
-const openChildrenWorkEditModal = (row) => {
-  editWork.value = Object.assign({}, row);
-  previousWork.value = Object.assign({}, row);
-  //selectedChildrenWork.value = row;
-  workRegistrationDialog.value = true;
+const openLinkDetailsModal = (row) => {
+  selectedWork.value = row;
+  if (selectedWork.value.work_id) {
+    parentWork.value = getParentWork(selectedWork.value.work_id);
+  } else {
+    getChildrenWork(selectedWork.value.id);
+  }
 };
 
 const saveComment = async () => {
+  if (!comment.value.content) {
+    return;
+  }
   let currentDate = getCurrentDateTime();
   comment.value.user = userInfo.value.name;
   comment.value.icon = userInfo.value.icon;
@@ -633,7 +870,8 @@ const saveComment = async () => {
       selectedWork.value.id,
       staff,
       false,
-      getCurrentDateTime()
+      getCurrentDateTime(),
+      false
     );
     await addNormalNotification();
   }
@@ -661,10 +899,22 @@ const deleteComment = async (index) => {
   await putWorkComment();
 };
 
+const postTodo = async (work) => {
+  await addTodo(work);
+  if (route.path == "/todo") {
+    updateToDoDay();
+  }
+};
+
 const openEditDialog = () => {
   selectedTemplateName.value = "";
   editWork.value = Object.assign({}, selectedWork.value);
   previousWork.value = Object.assign({}, selectedWork.value);
+  if (selectedWork.value.work_id) {
+    previousChildrenWorkEstimateTime.value = selectedWork.value.estimate_time;
+    previousChildrenWorkActualTime.value = selectedWork.value.actual_time;
+    previousChildrenWorkProgress.value = selectedWork.value.progress;
+  }
   workRegistrationDialog.value = true;
 };
 
@@ -677,4 +927,13 @@ const openTodo = (work) => {
 const sendCommentStaffs = ref([]);
 </script>
 
-<style scoped></style>
+<style scoped>
+.comment {
+  position: relative;
+}
+.comment-delete {
+  position: absolute;
+  right: 5px;
+  bottom: 17px;
+}
+</style>

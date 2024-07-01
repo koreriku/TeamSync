@@ -1,7 +1,13 @@
 import { ref } from "vue";
 import axios from "axios";
 import { currentProjectUserIds } from "./project.js";
-import { newAttachedFiles, postFiles, deleteFile } from "./common.js";
+import {
+  newAttachedFiles,
+  postFiles,
+  deleteFile,
+  convertDepartmentIdToName,
+  convertDepartmentNameToId,
+} from "./common.js";
 import router from "../router/router.js";
 
 // 部署
@@ -24,6 +30,8 @@ const inputUserInfo = ref({
   name: "",
   birthday: "",
   email: "",
+  department: 0,
+  department_name: "",
   password: "",
   icon: "",
   todo: [],
@@ -46,12 +54,17 @@ const userInfo = ref({
 });
 
 const users = ref([]);
+const usersForInput = ref([]);
 const projectUsers = ref([]);
 
 const getUser = async (id) => {
   await axios.get(userBASE_URL + "?id=" + id).then((res) => {
     if (id == 0) {
+      for (const data of res.data) {
+        data.department_name = convertDepartmentIdToName(data.department);
+      }
       users.value = res.data;
+      usersForInput.value = res.data;
     } else {
       projectUsers.value.push(res.data[0]);
     }
@@ -65,6 +78,9 @@ const postUser = async () => {
   }
   await axios.post(userBASE_URL, inputUserInfo.value).then((res) => {
     userInfo.value = res.data[0];
+    userInfo.value.department_name = convertDepartmentIdToName(
+      res.data[0].department
+    );
     localStorage.setItem("userInfo", JSON.stringify(userInfo.value));
   });
 };
@@ -80,6 +96,9 @@ const putUser = async () => {
   }
   await axios.put(userBASE_URL, inputUserInfo.value).then((res) => {
     userInfo.value = res.data[0];
+    userInfo.value.department_name = convertDepartmentIdToName(
+      res.data[0].department
+    );
     localStorage.setItem("userInfo", JSON.stringify(userInfo.value));
   });
 };
@@ -91,6 +110,9 @@ const confirmUser = async () => {
     .then((res) => {
       if (res.data.length > 0) {
         userInfo.value = res.data[0];
+        userInfo.value.department_name = convertDepartmentIdToName(
+          res.data[0].department
+        );
         localStorage.setItem("userInfo", JSON.stringify(userInfo.value));
         router.push("/");
         return true;
@@ -188,15 +210,25 @@ const addTodo = async (id, isTodo) => {
 const boardContent = ref({
   id: 0,
   content: "",
+  department: "",
+  department_name: "",
 });
-const getBoard = async (id) => {
-  await axios.get(boardBASE_URL + "?id=" + id).then((res) => {
-    boardContent.value = res.data[0];
-  });
+const getBoard = async (department_id) => {
+  await axios
+    .get(boardBASE_URL + "?department_id=" + department_id)
+    .then((res) => {
+      boardContent.value = res.data[0];
+      boardContent.value.department_name = convertDepartmentIdToName(
+        res.data[0].department
+      );
+    });
 };
 const updateBoard = async () => {
   await axios.put(boardBASE_URL, boardContent.value).then((res) => {
     boardContent.value = res.data[0];
+    boardContent.value.department_name = convertDepartmentIdToName(
+      res.data[0].department
+    );
   });
 };
 
@@ -224,6 +256,20 @@ const searchOnlyUser = (id) => {
   }
 };
 
+const filterStaffs = (departmentName) => {
+  if (departmentName) {
+    let departmentId = convertDepartmentNameToId(departmentName);
+    usersForInput.value = [];
+    for (const user of users.value) {
+      if (user.department == departmentId) {
+        usersForInput.value.push(user);
+      }
+    }
+  } else {
+    usersForInput.value = users.value;
+  }
+};
+
 export {
   users,
   projectUsers,
@@ -233,6 +279,7 @@ export {
   previousFileName,
   notLoginAlert,
   boardContent,
+  usersForInput,
   getBoard,
   updateBoard,
   getUser,
@@ -248,4 +295,5 @@ export {
   convertOnlyUserNameToId,
   convertOnlyIdToUserName,
   searchOnlyUser,
+  filterStaffs,
 };

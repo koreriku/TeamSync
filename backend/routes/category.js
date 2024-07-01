@@ -22,30 +22,32 @@ router.put("/", async (req, res) => {
   query = {
     text: `
       UPDATE category
-      SET name = $2
+      SET name = $2,
+      project_id = $3
       WHERE id = $1;  
       `,
-    values: [data.id, data.name],
+    values: [data.id, data.name, data.project_id],
   };
   await throwQuery(res, query);
 });
 
 router.put("/multi", async (req, res) => {
   const items = req.body;
+  const project_id = req.query.project_id;
   for (const item of items) {
     query = {
       text: `
       UPDATE category
-      SET sort_key = $2 ,name = $3
+      SET sort_key = $2 ,name = $3, project_id = $4
       WHERE id = $1
       `,
-      values: [item.id, item.new_id, item.name],
+      values: [item.id, item.new_id, item.name, item.project_id],
     };
     await throwQueryNoRes(res, query);
   }
   query = {
-    text: `SELECT * FROM category WHERE project_id = $1 ORDER BY sort_key`,
-    values: [items[0].project_id],
+    text: `SELECT * FROM category WHERE $1 = ANY(project_id) ORDER BY sort_key`,
+    values: [project_id],
   };
   await throwQuery(res, query);
 });
@@ -53,7 +55,7 @@ router.put("/multi", async (req, res) => {
 router.get("/", async (req, res) => {
   const project_id = req.query.project_id;
   query = {
-    text: `SELECT * FROM category WHERE project_id = $1 ORDER BY id`,
+    text: `SELECT * FROM category WHERE $1 = ANY(project_id) ORDER BY sort_key`,
     values: [project_id],
   };
   await throwQuery(res, query);
@@ -69,7 +71,7 @@ router.get("/all", async (req, res) => {
 router.delete("/all", async (req, res) => {
   const project_id = req.query.project_id;
   query = {
-    text: `DELETE FROM category WHERE project_id = $1`,
+    text: `DELETE FROM category WHERE $1 = ANY(project_id)`,
     values: [project_id],
   };
   await throwQuery(res, query);

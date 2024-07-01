@@ -8,6 +8,7 @@ import {
   deleteAllCategory,
   deleteAllStatus,
   getWork,
+  getRecentUpdateWorks,
 } from "./work.js";
 import { userInfo } from "./user.js";
 
@@ -19,6 +20,7 @@ const currentProject = ref({
   title: "",
   detail: "",
   state: "",
+  state_name: { name: "", color: "" },
   staff_ids: [],
   from: "",
   to: "",
@@ -34,6 +36,7 @@ const selectedProject = ref({
   title: "",
   detail: "",
   state: "",
+  state_name: { name: "", color: "" },
   staff_ids: [],
   from: "",
   to: "",
@@ -47,6 +50,7 @@ const editProject = ref({
   title: "",
   detail: "",
   state: "",
+  state_name: { name: "", color: "" },
   staff_ids: [],
   from: "",
   to: "",
@@ -60,6 +64,7 @@ const editedProject = ref({
   title: "",
   detail: "",
   state: "",
+  state_name: { name: "", color: "" },
   staff_ids: [],
   from: "",
   to: "",
@@ -75,6 +80,7 @@ const resetProject = () => {
     title: "",
     detail: "",
     state: "",
+    state_name: { name: "", color: "" },
     staff_ids: [],
     from: "",
     to: "",
@@ -88,6 +94,7 @@ const resetProject = () => {
     title: "",
     detail: "",
     state: "",
+    state_name: { name: "", color: "" },
     staff_ids: [],
     from: "",
     to: "",
@@ -102,6 +109,7 @@ const resetProject = () => {
     title: "",
     detail: "",
     state: "",
+    state_name: { name: "", color: "" },
     staff_ids: [],
     from: "",
     to: "",
@@ -122,7 +130,7 @@ const getProject = async (id) => {
   if (id) {
     await axios.get(projectBASE_URL + "?user_id=" + id).then((res) => {
       for (const project of res.data) {
-        project.state = convertIdToProjectStatusName(project.state);
+        project.state_name = convertIdToProjectStatusName(project.state);
       }
       projects.value = res.data;
       searchedProjects.value = res.data;
@@ -156,13 +164,14 @@ const putProject = async () => {
 
 const deleteProject = async (id) => {
   await axios.delete(projectBASE_URL + "?id=" + id);
-  await deleteAllCategory(id);
-  await deleteAllStatus(id);
-  await deleteTemplateWithProjectId(id);
+  // await deleteAllCategory(id);
+  // await deleteAllStatus(id);
+  // await deleteTemplateWithProjectId(id);
   await getWork(id);
   for (const work of works.value) {
     await deleteWork(work.id);
   }
+  await getRecentUpdateWorks();
 };
 
 const getProjectStatus = async () => {
@@ -179,6 +188,61 @@ const convertProjectIdToName = (id) => {
   }
 };
 
+const convertProjectNameToId = (name) => {
+  for (const item of projects.value) {
+    if (name === item.title) {
+      return item.id;
+    }
+  }
+};
+
+const convertProjectNamesToIds = (names) => {
+  let ids = [];
+  if (!names) {
+    return [];
+  }
+  for (const name of names) {
+    for (const project of projects.value) {
+      if (name === project.title) {
+        ids.push(project.id);
+        break;
+      }
+    }
+  }
+  return ids;
+};
+
+const convertProjectIdsToNames = (ids) => {
+  let names = [];
+  if (!ids) {
+    return [];
+  }
+  for (const id of ids) {
+    for (const project of projects.value) {
+      if (id === project.id) {
+        names.push(project.title);
+        break;
+      }
+    }
+  }
+  return names;
+};
+
+const convertProjectNameToProjectNo = (name) => {
+  for (const item of projects.value) {
+    if (name === `${item.title}(${item.project_no})`) {
+      return item.project_no;
+    }
+  }
+};
+const convertProjectProjectNoToName = (no) => {
+  for (const item of projects.value) {
+    if (no == item.project_no) {
+      return `${item.title}(${item.project_no})`;
+    }
+  }
+};
+
 const convertProjectStatusNameToId = (name) => {
   for (const item of projectStatus.value) {
     if (name === item.name) {
@@ -187,9 +251,12 @@ const convertProjectStatusNameToId = (name) => {
   }
 };
 const convertIdToProjectStatusName = (id) => {
+  if (!id) {
+    return "";
+  }
   for (const item of projectStatus.value) {
     if (id == item.id) {
-      return item.name;
+      return { name: item.name, color: item.color };
     }
   }
 };
@@ -225,16 +292,23 @@ const searchProject = () => {
       if (key == "state") {
         if (
           searchProjectCondition.value.state == "完了以外" &&
-          project.state != "完了"
+          project.state_name.name != "完了"
         ) {
           judge = true;
-        } else if (searchProjectCondition.value.state == project.state) {
+        } else if (
+          searchProjectCondition.value.state == project.state_name.name
+        ) {
           judge = true;
         }
       } else if (key == "word") {
         let judgeWord = false;
         for (const projectKey in project) {
-          let text = String(project[projectKey]);
+          let text;
+          if (projectKey == "state_name") {
+            text = String(project[projectKey].name);
+          } else {
+            text = String(project[projectKey]);
+          }
           if (text.includes(searchProjectCondition.value[key])) {
             judgeWord = true;
             break;
@@ -256,6 +330,7 @@ const searchProject = () => {
 const resetSearchProjectCondition = () => {
   searchProjectCondition.value = {
     state: "",
+    word: "",
   };
 };
 
@@ -296,4 +371,9 @@ export {
   getParticipatingProjectIds,
   getProjectAll,
   getLocalProject,
+  convertProjectNameToProjectNo,
+  convertProjectProjectNoToName,
+  convertProjectNameToId,
+  convertProjectNamesToIds,
+  convertProjectIdsToNames,
 };

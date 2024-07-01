@@ -4,7 +4,6 @@ import axios from "axios";
 const commonBASE_URL = "http://localhost:3000/common";
 
 const baseURL = new URL(window.location.href).origin;
-console.log(baseURL);
 
 const markDownColor = ref("#E0E0E0");
 
@@ -66,6 +65,9 @@ const convertArrayToText = (array) => {
   }
   return text;
 };
+
+const baseThemeColor = ref("light");
+const themeColor = ref("blue");
 
 // 前回の添付ファイルを格納
 const newAttachedFile = ref([]);
@@ -143,6 +145,43 @@ const snackbar = ref({
   text: "",
 });
 
+const departments = ref([]);
+const departmentsForInput = ref([]);
+const getDepartments = async () => {
+  departments.value = [];
+  departmentsForInput.value = [];
+  await axios.get("http://oec-dx-hub/api/departments").then((res) => {
+    if (res.data.length == 0) return;
+    const today = new Date();
+    for (const department of res.data) {
+      if (
+        new Date(department.from) < today &&
+        new Date(department.to) > today
+      ) {
+        departmentsForInput.value.push(department);
+      }
+    }
+    departments.value = res.data;
+  });
+};
+
+const convertDepartmentNameToId = (name) => {
+  for (const department of departments.value) {
+    if (department.name == name) {
+      return department.id;
+    }
+  }
+  return null;
+};
+
+const convertDepartmentIdToName = (id) => {
+  for (const department of departments.value) {
+    if (department.id == id) {
+      return department.name;
+    }
+  }
+  return null;
+};
 export {
   emailRules,
   isDeleteDialogOpen,
@@ -154,6 +193,12 @@ export {
   deleteTarget,
   isPreview,
   snackbar,
+  departments,
+  departmentsForInput,
+  baseThemeColor,
+  themeColor,
+  convertDepartmentNameToId,
+  convertDepartmentIdToName,
   getCurrentDate,
   getFutureDate,
   getCurrentDateTime,
@@ -162,4 +207,5 @@ export {
   deleteFile,
   omittedText,
   displaySnackbar,
+  getDepartments,
 };

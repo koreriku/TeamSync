@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TeamSync-Notificator</title>
+    <link rel="stylesheet" href="static/css/style.css" />
+    <!-- <script src="static/js/watch.js"></script> -->
+  </head>
+  <body>
+    <div class="header">
+      <p onclick="logout()" id="logout" class="pointer tr-data">ログアウト</p>
+    </div>
+    <div class="container">
+      <div id="notifications"></div>
+      <div id="login-form" style="display: none">
+        <h2>ログイン</h2>
+        <form action="#" method="post">
+          <p>
+            <input
+              class="form-text"
+              type="text"
+              name="email"
+              id="email"
+              placeholder="メールアドレス"
+            />
+          </p>
+          <p>
+            <input
+              class="form-text"
+              type="password"
+              name="password"
+              id="password"
+              placeholder="パスワード"
+            />
+          </p>
+          <p>
+            <input
+              class="form-button"
+              type="button"
+              value="ログイン"
+              id="login"
+              onclick="confirmUser()"
+            />
+          </p>
+        </form>
+      </div>
+    </div>
+    <script src="notification.js"></script>
+  </body>
+</html>

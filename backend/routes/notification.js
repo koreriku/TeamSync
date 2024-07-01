@@ -9,9 +9,9 @@ router.post("/", async (req, res) => {
   const data = req.body;
   query = {
     text: `SELECT * FROM notification 
-            WHERE user_id = $1 AND work_id = $2
+            WHERE user_id = $1 AND work_id = $2 AND is_wiki = $3
             `,
-    values: [data.user_id, data.work_id],
+    values: [data.user_id, data.work_id, data.is_wiki],
   };
   await pool
     .query(query)
@@ -22,8 +22,8 @@ router.post("/", async (req, res) => {
       }
       query = {
         text: `
-            INSERT INTO notification (title, detail, work_id, user_id, is_read, registration_date)
-            VALUES ($1, $2, $3, $4, $5, $6);
+            INSERT INTO notification (title, detail, work_id, user_id, is_read, registration_date, is_wiki)
+            VALUES ($1, $2, $3, $4, $5, $6, $7);
           `,
         values: [
           data.title,
@@ -32,6 +32,7 @@ router.post("/", async (req, res) => {
           data.user_id,
           data.is_read,
           data.registration_date,
+          data.is_wiki,
         ],
       };
       await throwQuery(res, query);
@@ -46,8 +47,8 @@ router.post("/normal", async (req, res) => {
   const data = req.body;
   query = {
     text: `
-            INSERT INTO notification (title, detail, work_id, user_id, is_read, registration_date)
-            VALUES ($1, $2, $3, $4, $5, $6);
+            INSERT INTO notification (title, detail, work_id, user_id, is_read, registration_date, is_wiki)
+            VALUES ($1, $2, $3, $4, $5, $6, $7);
             `,
     values: [
       data.title,
@@ -56,6 +57,7 @@ router.post("/normal", async (req, res) => {
       data.user_id,
       data.is_read,
       data.registration_date,
+      data.is_wiki,
     ],
   };
   await throwQuery(res, query);
@@ -76,7 +78,20 @@ router.put("/is_read", async (req, res) => {
   query = {
     text: `
         UPDATE notification
-        SET is_read = $2
+        SET is_read = $2,is_noticed = $3
+        WHERE id = $1;  
+        `,
+    values: [id, true, true],
+  };
+  await throwQuery(res, query);
+});
+
+router.put("/is_noticed", async (req, res) => {
+  const id = req.query.id;
+  query = {
+    text: `
+        UPDATE notification
+        SET is_noticed = $2
         WHERE id = $1;  
         `,
     values: [id, true],
@@ -93,8 +108,9 @@ router.delete("/", async (req, res) => {
 
 router.delete("/work", async (req, res) => {
   const work_id = req.query.work_id;
+  const is_wiki = req.query.is_wiki;
   query = {
-    text: `DELETE FROM notification WHERE work_id = ${work_id}`,
+    text: `DELETE FROM notification WHERE work_id = ${work_id} AND is_wiki = ${is_wiki}`,
   };
   await throwQuery(res, query);
 });

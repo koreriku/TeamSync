@@ -5,6 +5,7 @@ import work from "../components/work.vue";
 import project from "../components/project.vue";
 import todo from "../components/todo.vue";
 import wiki from "../components/wiki.vue";
+import manual from "../components/manual.vue";
 import test from "../components/test.vue";
 
 const routes = [
@@ -37,6 +38,11 @@ const routes = [
     path: "/wiki",
     name: "wiki",
     component: wiki,
+  },
+  {
+    path: "/manual",
+    name: "manual",
+    component: manual,
   },
   {
     path: "/test",

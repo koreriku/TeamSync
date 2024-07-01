@@ -10,11 +10,12 @@ let query = {};
 
 router.post("/", async (req, res) => {
   const data = req.body;
-  console.log(data);
   query = {
     text: `
-    INSERT INTO works (title, project, detail, state, staffs, priority, category, version, "from", "to", estimate_time, actual_time, progress, se_daily_report_process, registration_date, update_date, files, children_title, work_id, registered_staff)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING id;
+    INSERT INTO works (title, project, detail, state, staffs, priority, category, version, "from", "to", 
+    estimate_time, actual_time, progress, se_daily_report_process, registration_date, update_date, files, 
+    children_title, work_id, registered_staff, gross_estimate_time, gross_actual_time, gross_progress)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23) RETURNING id;
   `,
     values: [
       data.title,
@@ -37,6 +38,9 @@ router.post("/", async (req, res) => {
       data.children_title,
       data.work_id,
       data.registered_staff,
+      data.gross_estimate_time,
+      data.gross_actual_time,
+      data.gross_progress,
     ],
   };
   await throwQuery(res, query);
@@ -66,7 +70,10 @@ router.put("/", async (req, res) => {
     files = $18,
     se_daily_report_process = $19,
     children_title = $20,
-    work_id = $21
+    work_id = $21,
+    gross_estimate_time = $22,
+    gross_actual_time = $23,
+    gross_progress = $24
     WHERE id = $1;  
     `,
     values: [
@@ -91,6 +98,43 @@ router.put("/", async (req, res) => {
       data.se_daily_report_process,
       data.children_title,
       data.work_id,
+      data.gross_estimate_time,
+      data.gross_actual_time,
+      data.gross_progress,
+    ],
+  };
+  await throwQuery(res, query);
+});
+
+router.put("/progressAndTime", async (req, res) => {
+  const data = req.body;
+  query = {
+    text: `
+      UPDATE works SET
+      actual_time = $2,
+      progress = $3,
+      state = $4
+      WHERE id = $1;  
+      `,
+    values: [data.id, data.actual_time, data.progress, data.state],
+  };
+  await throwQuery(res, query);
+});
+router.put("/parentProgressAndTime", async (req, res) => {
+  const data = req.body;
+  query = {
+    text: `
+      UPDATE works SET
+      gross_estimate_time = $2,
+      gross_actual_time = $3,
+      gross_progress = $4
+      WHERE id = $1;  
+      `,
+    values: [
+      data.id,
+      data.gross_estimate_time,
+      data.gross_actual_time,
+      data.gross_progress,
     ],
   };
   await throwQuery(res, query);
@@ -173,6 +217,9 @@ router.get("/projectIds", async (req, res) => {
 
 router.delete("/", async (req, res) => {
   const id = req.query.id;
+  if (!id) {
+    res.send("IDがNullです。");
+  }
   query = {
     text: `DELETE FROM works WHERE id = $1 OR work_id = $1`,
     values: [id],

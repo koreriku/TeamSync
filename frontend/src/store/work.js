@@ -10,6 +10,9 @@ import {
   getParticipatingProjectIds,
   participatingProjectIds,
   getLocalProject,
+  convertProjectIdsToNames,
+  searchProjectCondition,
+  convertProjectNamesToIds,
 } from "./project.js";
 import {
   convertIdToUserName,
@@ -27,6 +30,7 @@ import {
   convertArrayToText,
   getCurrentDate,
   displaySnackbar,
+  getDepartments,
 } from "./common.js";
 import {
   setEditNotification,
@@ -48,7 +52,8 @@ const isCategoryRegistrationDialog = ref(false);
 const isTemplateRegistrationDialog = ref(false);
 
 const newStatus = ref({
-  project_id: 0,
+  project_id: [],
+  project_name: [],
   name: "",
   sort_key: 0,
   color: "",
@@ -60,7 +65,8 @@ const priorities = ref([]);
 const categories = ref([]);
 const seDailyReportProcesses = ref([]);
 const newCategory = ref({
-  project_id: 0,
+  project_id: [],
+  project_name: [],
   name: "",
   sort_key: 0,
 });
@@ -94,6 +100,9 @@ const editWork = ref({
   children_title: "",
   work_id: 0,
   registered_staff: 0,
+  gross_estimate_time: 0,
+  gross_actual_time: 0,
+  gross_progress: 0,
 });
 const editedWork = ref({
   id: 0,
@@ -125,6 +134,9 @@ const editedWork = ref({
   children_title: "",
   work_id: 0,
   registered_staff: 0,
+  gross_estimate_time: 0,
+  gross_actual_time: 0,
+  gross_progress: 0,
 });
 
 let selectedWork = ref({});
@@ -160,6 +172,9 @@ const resetWork = () => {
     children_title: "",
     work_id: 0,
     registered_staff: 0,
+    gross_estimate_time: 0,
+    gross_actual_time: 0,
+    gross_progress: 0,
   };
   resetEditedWork();
   selectedWork.value = {
@@ -192,6 +207,9 @@ const resetWork = () => {
     children_title: "",
     work_id: 0,
     registered_staff: 0,
+    gross_estimate_time: 0,
+    gross_actual_time: 0,
+    gross_progress: 0,
   };
 };
 const resetEditedWork = () => {
@@ -225,6 +243,9 @@ const resetEditedWork = () => {
     children_title: "",
     work_id: 0,
     registered_staff: 0,
+    gross_estimate_time: 0,
+    gross_actual_time: 0,
+    gross_progress: 0,
   };
 };
 const works = ref([]);
@@ -314,7 +335,8 @@ const postWork = async () => {
         res.data[0].id,
         staff,
         false,
-        getCurrentDateTime()
+        getCurrentDateTime(),
+        false
       );
       await addNotification();
     }
@@ -322,22 +344,43 @@ const postWork = async () => {
   await getWork();
 };
 
-const putWork = async () => {
-  await axios.put(workBASE_URL, editedWork.value);
-  for (const staff of editedWork.value.staffs) {
-    if (staff == userInfo.value.id) {
-      continue;
+const postOnlyWorkProgressAndTime = async (
+  id,
+  actual_time,
+  progress,
+  state
+) => {
+  await axios.put(workBASE_URL + "/progressAndTime", {
+    id: id,
+    actual_time: actual_time,
+    progress: progress,
+    state: state,
+  });
+};
+
+const putWork = async (work = editedWork.value, notice = true) => {
+  await axios.put(workBASE_URL, work);
+  if (notice) {
+    for (const staff of editedWork.value.staffs) {
+      if (staff == userInfo.value.id) {
+        continue;
+      }
+      setEditNotification(
+        `「${editedWork.value.title}」が変更されました。`,
+        "",
+        editedWork.value.id,
+        staff,
+        false,
+        getCurrentDateTime(),
+        false
+      );
+      await addNotification();
     }
-    setEditNotification(
-      `「${editedWork.value.title}」が変更されました。`,
-      "",
-      editedWork.value.id,
-      staff,
-      false,
-      getCurrentDateTime()
-    );
-    await addNotification();
   }
+};
+
+const putParentWorkProgressAndTime = async (work) => {
+  await axios.put(workBASE_URL + "/parentProgressAndTime", work);
 };
 
 const putWorkFiles = async (work) => {
@@ -350,7 +393,7 @@ const putWorkComment = async () => {
 
 const deleteWork = async (id) => {
   await axios.delete(workBASE_URL + "?id=" + id);
-  await deleteNotificationWithWorkID(id);
+  await deleteNotificationWithWorkID(id, false);
 };
 
 const getWork = async (id = currentProject.value.id) => {
@@ -370,7 +413,6 @@ const getWork = async (id = currentProject.value.id) => {
         work = convertWork(work);
         //work.comment = JSON.parse(work.comment);
       }
-      console.log(res.data);
       works.value = res.data;
       searchedWorks.value = res.data;
       search();
@@ -429,7 +471,12 @@ const openDetailsModal = (row) => {
   selectedWork.value = row;
   currentProject.value.id = selectedWork.value.project;
   getProjectUsers(getLocalProject(selectedWork.value.project).staff_ids);
-  getChildrenWork(selectedWork.value.id);
+  if (selectedWork.value.work_id) {
+    parentWork.value = getParentWork(selectedWork.value.work_id);
+    getChildrenWork(selectedWork.value.work_id);
+  } else {
+    getChildrenWork(selectedWork.value.id);
+  }
   isWorkDetailsDialogOpen.value = true;
 };
 
@@ -437,6 +484,8 @@ const previousChildrenWorkEstimateTime = ref(0);
 const previousChildrenWorkActualTime = ref(0);
 const previousChildrenWorkStaffs = ref([]);
 const previousChildrenWorkProgress = ref(0);
+
+const parentWork = ref({});
 
 const getParentWork = (work_id) => {
   for (const work of works.value) {
@@ -492,15 +541,6 @@ const getChildrenWork = (work_id) => {
       childrenWorks.value.push(work);
     }
   }
-  // await axios
-  //   .get(workBASE_URL + "/childrenWork?work_id=" + work_id)
-  //   .then((res) => {
-  //     for (const childrenWork of res.data) {
-  //       childrenWork.state = convertStatusIdToName(childrenWork.state);
-  //       childrenWork.staffsName = convertIdToUserName(childrenWork.staffs);
-  //     }
-  //     childrenWorks.value = res.data;
-  //   });
 };
 
 const deleteChildrenWork = async (id) => {
@@ -524,42 +564,61 @@ const getStatus = async (id = currentProject.value.id) => {
     return;
   }
   await axios.get(statusBASE_URL + "?project_id=" + id).then((res) => {
+    for (const data of res.data) {
+      data.project_name = convertProjectIdsToNames(data.project_id);
+    }
     statuses.value = res.data;
-    statuses.value.unshift("");
+    statuses.value.unshift({ name: "" });
   });
 };
 
 const getStatusAll = async () => {
   await axios.get(statusBASE_URL + "/all").then((res) => {
+    for (const data of res.data) {
+      data.project_name = convertProjectIdsToNames(data.project_id);
+    }
     statuses.value = res.data;
-    statuses.value.unshift("");
+    statuses.value.unshift({ name: "" });
   });
 };
 
 const postStatus = async () => {
-  if (!newStatus.value.name) {
-    return;
-  }
-  newStatus.value.project_id = currentProject.value.id;
+  newStatus.value.project_id = convertProjectNamesToIds(
+    newStatus.value.project_name
+  );
   newStatus.value.sort_key = statuses.value.length;
   await axios.post(statusBASE_URL, newStatus.value);
+  displaySnackbar("blue", "状況を登録しました。");
   await getStatus();
 };
 
 const putStatus = async (status) => {
-  displaySnackbar("blue", "状況を更新しました。");
+  if (status.name == "" || status.project_name.length == 0) {
+    displaySnackbar("red", "必須項目が入力されていません。");
+    return;
+  }
   if (selectedWork.value.state == status.id) {
     selectedWork.value.stateName = status;
   }
+  status.project_id = convertProjectNamesToIds(status.project_name);
   await axios.put(statusBASE_URL, status);
+  displaySnackbar("blue", "状況を更新しました。");
   await updateRouteDisplayWork();
 };
 
 const putMultiStatus = async (items) => {
-  await axios.put(statusBASE_URL + "/multi", items).then((res) => {
-    statuses.value = res.data;
-    statuses.value.unshift("");
-  });
+  await axios
+    .put(
+      statusBASE_URL + "/multi" + "?project_id=" + currentProject.value.id,
+      items
+    )
+    .then((res) => {
+      for (const data of res.data) {
+        data.project_name = convertProjectIdsToNames(data.project_id);
+      }
+      statuses.value = res.data;
+      statuses.value.unshift("");
+    });
 };
 
 const deleteStatus = async (id) => {
@@ -670,10 +729,9 @@ const convertPriorityIdToName = (id) => {
 };
 
 const postCategory = async (id = currentProject.value.id) => {
-  if (!newCategory.value.name) {
-    return;
-  }
-  newCategory.value.project_id = id;
+  newCategory.value.project_id = convertProjectNamesToIds(
+    newCategory.value.project_name
+  );
   newCategory.value.sort_key = categories.value.length + 1;
   await axios.post(categoryBASE_URL, newCategory.value);
   await getCategory(id);
@@ -684,24 +742,44 @@ const getCategory = async (id = currentProject.value.id) => {
     return;
   }
   await axios.get(categoryBASE_URL + "?project_id=" + id).then((res) => {
+    for (const data of res.data) {
+      data.project_name = convertProjectIdsToNames(data.project_id);
+    }
     categories.value = res.data;
   });
 };
 
 const getCategoryAll = async () => {
   await axios.get(categoryBASE_URL + "/all").then((res) => {
+    for (const data of res.data) {
+      data.project_name = convertProjectIdsToNames(data.project_id);
+    }
     categories.value = res.data;
   });
 };
 
 const putCategory = async (category) => {
+  if (category.name == "" || category.project_name.length == 0) {
+    displaySnackbar("red", "必須項目が入力されていません。");
+    return;
+  }
+  category.project_id = convertProjectNamesToIds(category.project_name);
   await axios.put(categoryBASE_URL, category);
 };
 
 const putMultiCategory = async (items) => {
-  await axios.put(categoryBASE_URL + "/multi", items).then((res) => {
-    categories.value = res.data;
-  });
+  await axios
+    .put(
+      categoryBASE_URL + "/multi" + "?project_id=" + currentProject.value.id,
+      items
+    )
+    .then((res) => {
+      for (const data of res.data) {
+        data.project_name = convertProjectIdsToNames(data.project_id);
+      }
+      categories.value = res.data;
+      categories.value.unshift("");
+    });
 };
 
 const deleteCategory = async (id) => {
@@ -714,7 +792,6 @@ const deleteAllCategory = async (project_id) => {
 
 const sortCategory = async () => {
   const usedCategory = sortItems(categories.value);
-
   if (usedCategory) await putMultiCategory(usedCategory);
 };
 
@@ -736,6 +813,9 @@ const convertCategoryNameToId = (names) => {
 
 const convertCategoryIdToName = (ids) => {
   let names = [];
+  if (!ids) {
+    return names;
+  }
   for (const id of ids) {
     for (const category of categories.value) {
       if (id === category.id) {
@@ -763,7 +843,7 @@ const convertSeDailyReportProcessNameToId = (name) => {
 
 const convertSeDailyReportProcessIdToName = (no) => {
   for (const seDailyReportProcess of seDailyReportProcesses.value) {
-    if (no === seDailyReportProcess.no) {
+    if (no == seDailyReportProcess.no) {
       return `${seDailyReportProcess.no}.${seDailyReportProcess.name}`;
     }
   }
@@ -777,6 +857,7 @@ const searchWorkConditions = ref({
   priorityName: "",
   categoryName: "",
   word: "",
+  notDisplayProgress100: false,
 });
 
 const resetSearchWorkConditions = () => {
@@ -786,24 +867,28 @@ const resetSearchWorkConditions = () => {
     priorityName: "",
     categoryName: "",
     word: "",
+    notDisplayProgress100: false,
   };
+  exceptSelectedSearchState.value = false;
 };
 
 const searchedWorks = ref([]);
 
 const isSearched = ref(false);
-
+const exceptSelectedSearchState = ref(false);
 const search = () => {
   isSearched.value = true;
   searchedWorks.value = [];
   const useSearchWorkConditions = [];
   let judge = false;
+
   if (
     !searchWorkConditions.value.stateName &&
     !searchWorkConditions.value.priorityName &&
     !searchWorkConditions.value.categoryName &&
     !searchWorkConditions.value.staffsName &&
-    !searchWorkConditions.value.word
+    !searchWorkConditions.value.word &&
+    !searchWorkConditions.value.notDisplayProgress100
   ) {
     isSearched.value = false;
     searchedWorks.value = works.value.concat();
@@ -818,7 +903,17 @@ const search = () => {
   for (const work of works.value) {
     judge = false;
     for (const key of useSearchWorkConditions) {
-      if (key == "staffsName") {
+      if (
+        key == "notDisplayProgress100" &&
+        searchWorkConditions.value.notDisplayProgress100
+      ) {
+        if (Number(work.progress) < 100) {
+          judge = true;
+        } else {
+          judge = false;
+          break;
+        }
+      } else if (key == "staffsName") {
         let judgeStaff = false;
         for (const staff of work[key]) {
           if (searchWorkConditions.value[key] === staff) {
@@ -847,11 +942,20 @@ const search = () => {
           break;
         }
       } else if (key == "stateName") {
-        if (searchWorkConditions.value[key] === work[key].name) {
-          judge = true;
+        if (exceptSelectedSearchState.value) {
+          if (searchWorkConditions.value[key] != work[key].name) {
+            judge = true;
+          } else {
+            judge = false;
+            break;
+          }
         } else {
-          judge = false;
-          break;
+          if (searchWorkConditions.value[key] == work[key].name) {
+            judge = true;
+          } else {
+            judge = false;
+            break;
+          }
         }
       } else if (key == "word") {
         let judgeWord = false;
@@ -879,6 +983,26 @@ const search = () => {
     }
     if (judge) {
       searchedWorks.value.push(work);
+    }
+  }
+};
+
+const searchRecentWorksWithWord = () => {
+  let be = false;
+  if (searchProjectCondition.value["word"]) {
+    for (const [index, work] of Object.entries(showRecentUpdateWorks.value)) {
+      be = false;
+      for (const workKey in work) {
+        let text = String(work[workKey]);
+        if (text.includes(searchProjectCondition.value["word"])) {
+          be = true;
+          showRecentUpdateWorks.value.push(work);
+          break;
+        }
+      }
+      if (!be) {
+        showRecentUpdateWorks.value.splice(index);
+      }
     }
   }
 };
@@ -1090,7 +1214,8 @@ const outputExcelChoices = async () => {
 
 const template = ref({
   id: 0,
-  project_id: 0,
+  project_id: [],
+  project_name: [],
   name: "",
   title: "",
   detail: "",
@@ -1099,7 +1224,8 @@ const templates = ref([]);
 const resetTemplate = () => {
   template.value = {
     id: 0,
-    project_id: 0,
+    project_id: [],
+    project_name: [],
     name: "",
     title: "",
     detail: "",
@@ -1110,14 +1236,21 @@ const selectedTemplateName = ref("");
 const postTemplate = async () => {
   await axios.post(templateBASE_URL, template.value);
 };
-const getTemplate = async () => {
+const putTemplate = async () => {
+  await axios.put(templateBASE_URL, template.value);
+};
+const getTemplate = async (project_id = selectedWork.value.project) => {
   await axios
-    .get(templateBASE_URL + "?project_id=" + template.value.project_id)
+    .get(templateBASE_URL + "?project_id=" + project_id)
     .then((res) => {
+      for (const data of res.data) {
+        data.project_name = convertProjectIdsToNames(data.project_id);
+      }
       templates.value = res.data;
       templates.value.unshift({
         id: 0,
-        project_id: 0,
+        project_id: [],
+        project_name: [],
         name: "",
         title: "",
         detail: "",
@@ -1151,6 +1284,7 @@ const getRecentUpdateWorks = async (isGetStatus = true) => {
       if (isGetStatus) {
         await getStatusAll();
       }
+      await getDepartments();
       await getCategoryAll();
       await getSeDailyReportProcess();
       await getPriority();
@@ -1159,10 +1293,49 @@ const getRecentUpdateWorks = async (isGetStatus = true) => {
         work = convertWork(work);
       }
       recentUpdateWorks.value = res.data;
-      showRecentUpdateWorks.value = res.data;
+      searchUpdateWorks();
       works.value = res.data;
     });
 };
+
+const pushMyself = () => {
+  if (!editWork.value.staffsName.includes(userInfo.value.name))
+    editWork.value.staffsName.push(userInfo.value.name);
+};
+const workTab = ref("recent");
+const searchUpdateWorks = () => {
+  if (workTab.value == "myWork") {
+    showRecentUpdateWorks.value = [];
+    for (const work of recentUpdateWorks.value.concat()) {
+      if (
+        work.staffs.includes(userInfo.value.id) &&
+        work.progress != 100 &&
+        work.stateName.name != "完了"
+      ) {
+        showRecentUpdateWorks.value.push(work);
+      }
+    }
+
+    showRecentUpdateWorks.value.sort((a, b) => {
+      //オブジェクトの値を比較。
+      if (!a.to || !b.to) {
+        return b.to > a.to ? 1 : -1;
+      }
+      return a.to > b.to ? 1 : -1;
+    });
+    showRecentUpdateWorks.value.sort((a, b) => {
+      //オブジェクトの値を比較。
+      if (b.priority == 1 || !b.priority || a.priority == 1 || !a.priority) {
+        return b.priority - a.priority;
+      }
+      return a.priority - b.priority;
+    });
+  } else {
+    showRecentUpdateWorks.value = recentUpdateWorks.value.concat();
+  }
+  searchRecentWorksWithWord();
+};
+
 const correspondenceWorkIdAndName = {
   title: "タイトル",
   detail: "詳細",
@@ -1208,6 +1381,9 @@ const commentDifferenceWork = () => {
       key == "state" ||
       key == "comment" ||
       key == "todo" ||
+      key == "gross_estimate_time" ||
+      key == "gross_actual_time" ||
+      key == "gross_progress" ||
       key == "files"
     )
       continue;
@@ -1385,6 +1561,54 @@ const setWork = (targetWork, referenceWork) => {
   return targetWork;
 };
 
+const getLink = (
+  url = `${baseURL}/TeamSync/?work_id=${selectedWork.value.id}`
+) => {
+  // http環境で動くコピーコード
+  const copyTextFallback = (str) => {
+    if (!str || typeof str !== "string") {
+      return "";
+    }
+    // 空div 生成
+    var tmp = document.createElement("div");
+    // 選択用のタグ生成
+    var pre = document.createElement("pre");
+
+    // 親要素のCSSで user-select: none だとコピーできないので書き換える
+    pre.style.webkitUserSelect = "auto";
+    pre.style.userSelect = "auto";
+
+    tmp.appendChild(pre).textContent = str;
+
+    // 要素を画面外へ
+    var s = tmp.style;
+    s.position = "fixed";
+    s.right = "200%";
+
+    // body に追加
+    document.body.appendChild(tmp);
+    // 要素を選択
+    document.getSelection().selectAllChildren(tmp);
+
+    // クリップボードにコピー
+    var result = document.execCommand("copy");
+
+    // 要素削除
+    document.body.removeChild(tmp);
+    return;
+  };
+
+  if (!navigator.clipboard) {
+    // navigator.clipboardが利用的出来ない場合は、フォールバックなコードを実行
+    copyTextFallback(url);
+    displaySnackbar("grey", "URLをクリップボードにコピーしました");
+    return;
+  }
+  // https環境で動作するコード
+  navigator.clipboard.writeText(url);
+  displaySnackbar("grey", "URLをクリップボードにコピーしました");
+};
+
 export {
   workRegistrationDialog,
   isWorkDetailsDialogOpen,
@@ -1425,6 +1649,9 @@ export {
   seDailyReportProcesses,
   previousWork,
   showRecentUpdateWorks,
+  parentWork,
+  exceptSelectedSearchState,
+  workTab,
   getSeDailyReportProcess,
   putWorkComment,
   getChildrenWork,
@@ -1484,4 +1711,11 @@ export {
   getCategoryAll,
   deadlineIsPasted,
   setWork,
+  postOnlyWorkProgressAndTime,
+  getLink,
+  searchUpdateWorks,
+  pushMyself,
+  putTemplate,
+  searchRecentWorksWithWord,
+  putParentWorkProgressAndTime,
 };

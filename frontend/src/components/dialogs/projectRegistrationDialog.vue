@@ -1,6 +1,6 @@
 <template>
   <v-dialog v-model="isProjectRegistrationDialogOpen" max-width="600px">
-    <v-card>
+    <v-card :class="{ 'dark-scroll-bar': baseThemeColor == 'dark' }">
       <v-card-title class="d-flex justify-space-between">
         <span class="headline" v-if="props.isEdited">プロジェクト編集</span>
         <span class="headline" v-else>プロジェクト登録</span>
@@ -30,10 +30,11 @@
         <v-container>
           <v-row>
             <v-col cols="12">
-              <v-text-field
-                v-model="editProject.title"
-                label="タイトル"
-              ></v-text-field>
+              <v-text-field v-model="editProject.title"
+                ><template v-slot:label>
+                  タイトル <span class="red-asterisk ml-1">*</span>
+                </template></v-text-field
+              >
             </v-col>
             <v-col cols="12">
               <v-textarea
@@ -42,26 +43,68 @@
               ></v-textarea>
             </v-col>
             <v-col cols="12">
-              <v-text-field
-                v-model="editProject.project_no"
-                label="プロジェクトNO"
-              ></v-text-field>
+              <v-text-field v-model="editProject.project_no"
+                ><template v-slot:label>
+                  プロジェクトNO <span class="red-asterisk ml-1">*</span>
+                </template></v-text-field
+              >
             </v-col>
-            <v-col cols="6">
+            <v-col cols="5">
               <v-select
                 :items="projectStatus.map((item) => item.name)"
-                v-model="editProject.state"
+                v-model="editProject.state_name.name"
                 label="状態"
               ></v-select>
             </v-col>
-            <v-col cols="6">
+            <v-col cols="7" class="d-flex">
               <v-combobox
                 v-model="currentProjectUserIds"
-                :items="users.map((item) => item.name)"
-                label="担当者"
+                :items="usersForInput.map((item) => item.name)"
                 multiple
                 chips
-              ></v-combobox>
+                class="mr-2"
+                ><template v-slot:label>
+                  担当者 <span class="red-asterisk ml-1">*</span>
+                </template></v-combobox
+              >
+              <v-menu
+                v-model="filterStaffMenu"
+                :close-on-content-click="false"
+                location="end"
+              >
+                <template v-slot:activator="{ props }">
+                  <v-btn
+                    color="grey"
+                    class="mt-2"
+                    v-bind="props"
+                    icon
+                    size="small"
+                  >
+                    <v-icon>mdi-filter-outline</v-icon>
+                    <v-tooltip activator="parent" location="bottom"
+                      >部署で担当者を絞り込む</v-tooltip
+                    >
+                  </v-btn>
+                </template>
+                <v-card width="350">
+                  <v-card-text
+                    ><v-select
+                      label="部署"
+                      v-model="filterDepartment"
+                      :items="
+                        [{ name: '' }, ...departmentsForInput]
+                          .filter((item) => item.name != '--')
+                          .map((item) => item.name)
+                      "
+                      @update:model-value="
+                        () => {
+                          filterStaffs(filterDepartment);
+                        }
+                      "
+                    ></v-select
+                  ></v-card-text>
+                </v-card>
+              </v-menu>
             </v-col>
             <v-col cols="6">
               <v-text-field
@@ -145,7 +188,13 @@ import {
   projects,
 } from "../../store/project.js";
 import { getWork } from "../../store/work.js";
-import { isDeleteDialogOpen } from "../../store/common.js";
+import {
+  isDeleteDialogOpen,
+  departmentsForInput,
+  getDepartments,
+  baseThemeColor,
+  displaySnackbar,
+} from "../../store/common.js";
 import {
   getUser,
   users,
@@ -153,6 +202,8 @@ import {
   convertUserNameToId,
   getProjectUsers,
   projectUsers,
+  filterStaffs,
+  usersForInput,
 } from "../../store/user.js";
 import deleteDialog from "./deleteDialog.vue";
 
@@ -160,7 +211,11 @@ const props = defineProps({
   isEdited: Boolean,
 });
 
+const filterStaffMenu = ref(false);
+const filterDepartment = ref("");
+
 onBeforeMount(async () => {
+  await getDepartments();
   await getUser(0);
   if (projectStatus.value.length === 0) {
     await getProjectStatus();
@@ -170,14 +225,32 @@ const closeDialog = () => {
   isProjectRegistrationDialogOpen.value = false;
 };
 
+const validateName = () => {
+  if (
+    editProject.value.title.replace(/ /g, "") &&
+    editProject.value.title.replace(/　/g, "") &&
+    editProject.value.project_no.replace(/ /g, "") &&
+    editProject.value.project_no.replace(/　/g, "") &&
+    currentProjectUserIds.value.length > 0
+  ) {
+    return false;
+  } else {
+    return true;
+  }
+};
+
 const saveProject = async () => {
+  if (validateName()) {
+    displaySnackbar("red", "必須項目が入力されていません。");
+    return;
+  }
   editedProject.value = Object.assign({}, editProject.value);
   selectedProject.value = Object.assign({}, editProject.value);
   editedProject.value.staff_ids = convertUserNameToId(
     currentProjectUserIds.value
   );
   editedProject.value.state = convertProjectStatusNameToId(
-    editedProject.value.state
+    editedProject.value.state_name.name
   );
   isProjectRegistrationDialogOpen.value = false;
   if (props.isEdited) {

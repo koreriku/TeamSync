@@ -9,5 +9,15 @@ body {
   white-space: pre-line;
 }
 .tr-data:hover {
-  color: #2196f3;
+  color: #bdbdbd;
+}
+.red-asterisk {
+  color: red;
+}
+.pre-wrap {
+  white-space: pre-wrap;
+  line-height: 1.6rem;
+}
+.dark-scroll-bar {
+  scrollbar-color: #757575 #424242;
 }

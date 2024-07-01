@@ -1,8 +1,9 @@
 <template>
   <v-dialog v-model="workRegistrationDialog" max-width="1000px">
-    <v-card>
+    <v-card :class="{ 'dark-scroll-bar': baseThemeColor == 'dark' }">
       <v-card-title class="d-flex justify-space-between">
-        <div class="headline">新規登録</div>
+        <div class="headline" v-if="editWork.id == 0">新規登録</div>
+        <div class="headline" v-else>編集</div>
         <v-btn
           icon
           color="gray"
@@ -45,22 +46,31 @@
                 >テンプレート追加</v-tooltip
               ></v-btn
             >
-            <v-btn icon color="gray" @click="deleteSelectedTemplate()">
-              <v-icon>mdi-delete-outline</v-icon>
-              <v-tooltip activator="parent" location="bottom"
-                >選択中のテンプレートを削除</v-tooltip
-              ></v-btn
-            >
           </div>
           <templateRegistration />
+          <v-row v-if="editWork.work_id">
+            <v-col cols="12" xs="12" sm="12" md="6" lg="6" xl="6" xxl="6">
+              <v-text-field
+                v-model="editWork.children_title"
+                label="子課題タイトル"
+                required
+              ></v-text-field>
+            </v-col>
+          </v-row>
+
+          <v-row v-if="!editWork.work_id && editWork.id">
+            <v-col cols="12" xs="12" sm="12" md="6" lg="6" xl="6" xxl="6">
+              <v-select
+                v-model="editWork.project_name"
+                :items="projects.map((item) => `${item.title}`)"
+                label="プロジェクト"
+              ></v-select>
+            </v-col>
+          </v-row>
           <v-text-field
-            v-if="editWork.work_id"
-            v-model="editWork.children_title"
-            label="子課題タイトル"
+            v-model="editWork.title"
             required
-            style="width: 50%"
-          ></v-text-field>
-          <v-text-field v-model="editWork.title" required
+            :disabled="editWork.work_id"
             ><template v-slot:label>
               タイトル <span class="red-asterisk ml-1">*</span>
             </template></v-text-field
@@ -210,11 +220,6 @@
               ><v-text-field
                 type="number"
                 v-model="editWork.estimate_time"
-                :disabled="
-                  editWork.id != 0 &&
-                  childrenWorks.length > 0 &&
-                  !editWork.work_id
-                "
                 label="予定時間"
               ></v-text-field
             ></v-col>
@@ -222,11 +227,6 @@
               ><v-text-field
                 type="number"
                 v-model="editWork.actual_time"
-                :disabled="
-                  editWork.id != 0 &&
-                  childrenWorks.length > 0 &&
-                  !editWork.work_id
-                "
                 label="実績時間"
               ></v-text-field
             ></v-col>
@@ -234,11 +234,6 @@
               ><v-text-field
                 type="number"
                 v-model="editWork.progress"
-                :disabled="
-                  editWork.id != 0 &&
-                  childrenWorks.length > 0 &&
-                  !editWork.work_id
-                "
                 label="進捗（%）"
               ></v-text-field
             ></v-col>
@@ -319,11 +314,16 @@ import {
   updateParentWorkByChildrenWork,
   setWork,
   convertStatusIdToName,
+  getParentWork,
+  parentWork,
+  pushMyself,
+  putParentWorkProgressAndTime,
 } from "../../store/work.js";
 import {
   currentProject,
   participatingProjectIds,
   projects,
+  convertProjectNameToId,
 } from "../../store/project.js";
 import {
   projectUsers,
@@ -340,6 +340,7 @@ import {
   markDownColor,
   isPreview,
   displaySnackbar,
+  baseThemeColor,
 } from "../../store/common.js";
 import { onBeforeMount } from "vue";
 import statusRegistration from "./statusRegistration.vue";
@@ -351,20 +352,12 @@ const route = useRoute();
 
 onBeforeMount(async () => {
   newAttachedFiles.value = [];
-  if (participatingProjectIds.value.includes(selectedWork.value.project)) {
-    await getStatus(selectedWork.value.project);
-    await getCategory();
-    await getPriority();
-    await getSeDailyReportProcess();
-    template.value.project_id = selectedWork.value.project;
-    await getTemplate(selectedWork.value.project);
-    for (const project of projects.value) {
-      if (project.id == selectedWork.value.project) {
-        getProjectUsers(project.staff_ids);
-        break;
-      }
-    }
-  }
+  await getStatus(selectedWork.value.project);
+  await getCategory();
+  await getPriority();
+  await getSeDailyReportProcess();
+  template.value.project_id = selectedWork.value.project;
+  await getTemplate(currentProject.value.id);
 });
 
 markDownColor.value = "#E0E0E0";
@@ -383,11 +376,6 @@ const validateName = () => {
   } else {
     requiredIsNull.value = true;
   }
-};
-
-const pushMyself = () => {
-  if (!editWork.value.staffsName.includes(userInfo.value.name))
-    editWork.value.staffsName.push(userInfo.value.name);
 };
 
 const saveWork = async () => {
@@ -411,7 +399,7 @@ const saveWork = async () => {
     selectedWork.value.files = [...editWork.value.files, ...files];
     editWork.value.files = JSON.stringify([...editWork.value.files, ...files]);
   } else {
-    editWork.value.files = "[]";
+    editWork.value.files = JSON.stringify(editWork.value.files);
   }
   editWork.value.project = currentProject.value.id;
   editWork.value.state = convertStatusNameToId(editWork.value.stateName.name);
@@ -419,6 +407,63 @@ const saveWork = async () => {
     editWork.value.categoryName
   );
   editWork.value.update_date = getCurrentDateTime();
+  if (!editWork.value.work_id) {
+    editWork.value.gross_estimate_time =
+      Number(editWork.value.estimate_time) +
+      childrenWorks.value.reduce((accumulator, currentObject) => {
+        return accumulator + Number(currentObject.estimate_time);
+      }, 0);
+    editWork.value.gross_actual_time =
+      Number(editWork.value.actual_time) +
+      childrenWorks.value.reduce((accumulator, currentObject) => {
+        return accumulator + Number(currentObject.actual_time);
+      }, 0);
+    editWork.value.gross_progress =
+      Math.round(
+        ((Number(editWork.value.progress) +
+          childrenWorks.value.reduce((accumulator, currentObject) => {
+            return accumulator + Number(currentObject.progress);
+          }, 0)) /
+          (childrenWorks.value.length + 1)) *
+          100
+      ) / 100;
+  } else {
+    parentWork.value.gross_estimate_time =
+      Number(parentWork.value.estimate_time) +
+      Number(
+        childrenWorks.value.reduce((accumulator, currentObject) => {
+          if (currentObject.id == editWork.value.id) {
+            return accumulator + editWork.value.estimate_time;
+          }
+          return accumulator + currentObject.estimate_time;
+        }, 0)
+      );
+    parentWork.value.gross_actual_time =
+      Number(parentWork.value.actual_time) +
+      Number(
+        childrenWorks.value.reduce((accumulator, currentObject) => {
+          if (currentObject.id == editWork.value.id) {
+            return accumulator + editWork.value.actual_time;
+          }
+          return accumulator + currentObject.actual_time;
+        }, 0)
+      );
+    parentWork.value.gross_progress =
+      Math.round(
+        ((Number(parentWork.value.progress) +
+          Number(
+            childrenWorks.value.reduce((accumulator, currentObject) => {
+              if (currentObject.id == editWork.value.id) {
+                return accumulator + editWork.value.progress;
+              }
+              return accumulator + currentObject.progress;
+            }, 0)
+          )) /
+          (childrenWorks.value.length + 1)) *
+          100
+      ) / 100;
+    await putParentWorkProgressAndTime(parentWork.value);
+  }
   editedWork.value = Object.assign({}, editWork.value);
   commentDifferenceWork();
   if (editedWork.value.id == 0) {
@@ -426,6 +471,9 @@ const saveWork = async () => {
     editedWork.value.registered_staff = userInfo.value.id;
     await postWork();
   } else {
+    editedWork.value.project = convertProjectNameToId(
+      editWork.value.project_name
+    );
     if (selectedWork.value.work_id == editedWork.value.work_id) {
       selectedWork.value = Object.assign({}, editWork.value);
       selectedWork.value.stateName = convertStatusIdToName(
@@ -434,10 +482,18 @@ const saveWork = async () => {
       selectedWork.value.files = newFiles;
     }
     await putWork();
+    if (childrenWorks.value.length > 0 && !editedWork.value.work_id) {
+      for (const childrenWork of childrenWorks.value) {
+        childrenWork.title = editedWork.value.title;
+        childrenWork.project = editedWork.value.project;
+        await putWork(childrenWork, false);
+      }
+    }
   }
+  selectedWork.value.files = JSON.parse(editWork.value.files);
   if (route.path == "/todo") {
     for (const user of displayTodoUsers.value) {
-      if ((user.id = userInfo.value.id)) {
+      if (user.id == userInfo.value.id) {
         for (let work of user.detail_todo) {
           if (work.id == editWork.value.id) {
             // work.title = editWork.value.title;
@@ -468,9 +524,9 @@ const saveWork = async () => {
     await getWork();
   }
   if (editedWork.value.work_id) {
-    let parentWork = await updateParentWorkByChildrenWork();
+    // parentWork.value = await updateParentWorkByChildrenWork();
     if (selectedWork.value.work_id != editedWork.value.work_id) {
-      selectedWork.value = parentWork;
+      selectedWork.value = parentWork.value;
     }
   }
   resetComment();
@@ -490,23 +546,4 @@ const changeTemplate = () => {
     }
   }
 };
-const deleteSelectedTemplate = async () => {
-  if (selectedTemplateName.value.length == 0) {
-    return;
-  }
-  for (const item of templates.value) {
-    if (item.name == selectedTemplateName.value) {
-      await deleteTemplate(item.id);
-      await getTemplate();
-      break;
-    }
-  }
-  selectedTemplateName.value = "";
-};
 </script>
-
-<style>
-.red-asterisk {
-  color: red;
-}
-</style>

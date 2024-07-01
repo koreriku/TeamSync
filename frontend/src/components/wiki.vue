@@ -26,34 +26,55 @@
       ></v-btn
     >
   </div>
-  <div class="d-flex justify-space-between mb-2">
-    <v-select
-      v-model="searchWikiCondition.category"
-      :items="[{ name: '' }, ...categories].map((item) => item.name)"
-      density="compact"
-      variant="outlined"
-      label="カテゴリー"
-      style="max-width: 500px"
-      @update:model-value="
-        () => {
-          searchWiki();
-        }
-      "
-    ></v-select>
-    <v-text-field
-      label="キーワード検索"
-      prepend-inner-icon="mdi-magnify"
-      v-model="searchWikiCondition.word"
-      density="compact"
-      variant="outlined"
-      style="max-width: 500px"
-      @keyup.enter="searchWiki"
-    ></v-text-field>
-  </div>
+  <v-row>
+    <v-col cols="12" xs="12" sm="12" md="3" lg="3" xl="3" xxl="3">
+      <v-select
+        v-model="searchWikiCondition.category"
+        :items="[{ name: '' }, ...categories].map((item) => item.name)"
+        density="compact"
+        variant="outlined"
+        label="カテゴリー"
+        @update:model-value="
+          () => {
+            searchWiki();
+          }
+        "
+      ></v-select>
+    </v-col>
+    <v-col cols="12" xs="12" sm="12" md="3" lg="3" xl="3" xxl="3">
+      <v-select
+        v-model="searchWikiCondition.department_name"
+        :items="
+          [
+            { name: '' },
+            ...departmentsForInput.filter((item) => item.name != '--'),
+          ].map((item) => item.name)
+        "
+        density="compact"
+        variant="outlined"
+        label="部署"
+        @update:model-value="
+          () => {
+            searchWiki();
+          }
+        "
+      ></v-select>
+    </v-col>
+    <v-col cols="12" xs="12" sm="12" md="6" lg="6" xl="6" xxl="6">
+      <v-text-field
+        label="キーワード検索"
+        prepend-inner-icon="mdi-magnify"
+        v-model="searchWikiCondition.word"
+        density="compact"
+        variant="outlined"
+        @keyup.enter="searchWiki"
+      ></v-text-field>
+    </v-col>
+  </v-row>
 
   <v-alert
     v-if="wikis.length == 0"
-    color="info"
+    color="blue"
     icon="$info"
     text="Wikiが投稿されていません。"
   ></v-alert>
@@ -83,6 +104,9 @@
             height="250px"
             cover
           ></v-img>
+          <v-card-subtitle class="mt-2 mb-n1"
+            ><div>{{ wiki.department_name }}</div>
+          </v-card-subtitle>
           <v-card-title
             ><div>{{ wiki.title }}</div>
           </v-card-title>
@@ -98,6 +122,7 @@
   <v-pagination v-model="page" :length="pageCount" class="mt-8"></v-pagination>
   <wikiRegistrationDialog :isEdited="isEdited" />
   <wikiDetailDialog />
+  <workDetailDialog />
 </template>
 
 <script setup>
@@ -116,19 +141,17 @@ import {
   resetSearchedWikis,
   resetWiki,
 } from "../store/wiki.js";
-import {
-  projects,
-  searchProjectCondition,
-  searchedProjects,
-  searchProject,
-  isSearchedProject,
-  resetSearchProjectCondition,
-} from "../store/project.js";
-import { getCategory, categories } from "../store/work.js";
-import { baseURL, markDownColor } from "../store/common.js";
-import { userInfo } from "../store/user.js";
-import wikiDetailDialog from "./dialogs/wiki/wikiDetailDialog.vue";
 
+import { getCategory, categories } from "../store/work.js";
+import {
+  baseURL,
+  markDownColor,
+  getDepartments,
+  departmentsForInput,
+} from "../store/common.js";
+import { userInfo, getUser } from "../store/user.js";
+import wikiDetailDialog from "./dialogs/wiki/wikiDetailDialog.vue";
+import workDetailDialog from "./dialogs/workDetailDialog.vue";
 import wikiRegistrationDialog from "./dialogs/wiki/wikiRegistrationDialog.vue";
 
 const router = useRouter();
@@ -140,8 +163,10 @@ if (!userInfo.value.id) {
   router.push("/login");
 }
 onBeforeMount(async () => {
+  await getDepartments();
   await getCategory(0);
   await getWiki();
+  await getUser(0);
   pageCount.value = Math.ceil(
     searchedWikis.value.length / displayWikiCount.value
   );

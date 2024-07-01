@@ -72,6 +72,10 @@ renderer.list = function (body, ordered) {
   }
 };
 
+renderer.image = (src) => {
+  return `<img src="${src}" class="img">`;
+};
+
 marked.use(mangle()).use(gfmHeadingId(options)).use({ renderer });
 
 if (props.source) {
@@ -98,9 +102,18 @@ watch(
 
 .list {
   margin-left: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 .list li {
   margin-bottom: -1.25rem;
+}
+.list li .list {
+  margin-top: 0.2rem;
+  margin-bottom: -1.5rem;
+}
+
+pre {
+  margin-bottom: 1rem;
 }
 
 .markdown-container {
@@ -110,17 +123,11 @@ watch(
 }
 
 .table {
-  width: 100%;
   border-collapse: separate;
   border-spacing: 0;
 }
 
-.table th:first-child {
-  border-radius: 5px 0 0 0;
-}
-
 .table th:last-child {
-  border-radius: 0 5px 0 0;
   border-right: 1px solid #757575;
 }
 
@@ -131,33 +138,22 @@ watch(
   border-left: 1px solid #757575;
   border-top: 1px solid #757575;
   border-bottom: 1px solid #757575;
-  width: 25%;
-  padding: 10px 0;
+  padding: 5px 10px;
 }
 
 .table td {
-  text-align: center;
   border-left: 1px solid #757575;
   border-bottom: 1px solid #757575;
   border-top: none;
-  width: 25%;
-  padding: 10px 0;
+  padding: 5px 10px;
 }
 
 .table td:last-child {
   border-right: 1px solid #757575;
 }
 
-.table tr:last-child td:first-child {
-  border-radius: 0 0 0 5px;
-}
-
-.table tr:last-child td:last-child {
-  border-radius: 0 0 5px 0;
-}
-
-img {
-  width: 80%;
+.img {
+  max-width: 80%;
   margin: 0 auto;
   display: block;
 }

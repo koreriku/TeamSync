@@ -146,7 +146,37 @@
       </span>
     </v-col>
   </v-row>
-  <div class="mt-1 mb-5">{{ currentProject.detail }}</div>
+  <div class="mt-1 mb-2">{{ currentProject.detail }}</div>
+  <div class="mb-5">
+    <v-chip
+      @click="
+        searchWorkConditions.notDisplayProgress100 =
+          !searchWorkConditions.notDisplayProgress100;
+        search();
+      "
+      variant="flat"
+      v-if="!searchWorkConditions.notDisplayProgress100"
+    >
+      進捗度100%以外
+    </v-chip>
+    <v-chip
+      v-else
+      @click="
+        searchWorkConditions.notDisplayProgress100 =
+          !searchWorkConditions.notDisplayProgress100;
+        search();
+      "
+      color="blue"
+      variant="flat"
+    >
+      進捗度100%以外
+    </v-chip>
+    <!-- <v-checkbox
+      label="進捗度100以下"
+      v-model="searchWorkConditions.notDisplayProgress100"
+      @click="search"
+    ></v-checkbox> -->
+  </div>
   <v-row>
     <v-col cols="6" xs="6" sm="6" md="3" lg="2" xl="2" xxl="2">
       <v-select
@@ -177,18 +207,43 @@
       ></v-select>
     </v-col>
     <v-col cols="6" xs="6" sm="6" md="3" lg="2" xl="2" xxl="2">
-      <v-select
-        v-model="searchWorkConditions.stateName"
-        :items="statuses.map((item) => item.name)"
-        density="compact"
-        variant="outlined"
-        label="状況"
-        @update:model-value="
-          () => {
+      <div class="d-flex">
+        <v-select
+          v-model="searchWorkConditions.stateName"
+          :items="statuses.map((item) => item.name)"
+          density="compact"
+          variant="outlined"
+          label="状況"
+          @update:model-value="
+            () => {
+              search();
+            }
+          "
+        ></v-select>
+        <v-chip
+          class="ml-2 mt-2"
+          @click="
+            exceptSelectedSearchState = !exceptSelectedSearchState;
             search();
-          }
-        "
-      ></v-select>
+          "
+          variant="flat"
+          v-if="!exceptSelectedSearchState"
+        >
+          以外
+        </v-chip>
+        <v-chip
+          v-else
+          class="ml-2 mt-2"
+          @click="
+            exceptSelectedSearchState = !exceptSelectedSearchState;
+            search();
+          "
+          variant="flat"
+          color="blue"
+        >
+          以外
+        </v-chip>
+      </div>
     </v-col>
     <v-col cols="6" xs="6" sm="6" md="3" lg="2" xl="2" xxl="2">
       <div class="d-flex">
@@ -245,6 +300,7 @@
         :fixed-header="true"
         item-key="id"
         no-data-text="データがありません。"
+        :class="{ 'dark-scroll-bar': baseThemeColor == 'dark' }"
       >
         <template v-slot:item="{ item }">
           <tr class="tr-data point-cursor">
@@ -252,7 +308,7 @@
               <v-btn
                 icon
                 size="x-small"
-                color="blue"
+                color="light-blue"
                 class="mr-3"
                 @click="openTodo(item.raw)"
               >
@@ -363,10 +419,10 @@
             </td>
             <td @click="openDetailsModal(item.raw)">
               <v-chip
-                v-if="item.columns.stateName.name"
-                :color="item.columns.stateName.color"
+                v-if="item.raw.stateName.name"
+                :color="item.raw.stateName.color"
               >
-                {{ item.columns.stateName.name }}
+                {{ item.raw.stateName.name }}
               </v-chip>
             </td>
             <td @click="openDetailsModal(item.raw)">
@@ -423,10 +479,12 @@
     </v-card>
   </div>
   <workDetailDialog />
+  <wikiDetailDialog />
 </template>
 
 <script setup>
 import { ref, computed } from "vue";
+import { useTheme } from "vuetify";
 import {
   workRegistrationDialog,
   resetWork,
@@ -455,6 +513,7 @@ import {
   openDetailsModal,
   getSeDailyReportProcess,
   deadlineIsPasted,
+  exceptSelectedSearchState,
 } from "../store/work.js";
 import {
   getCurrentDate,
@@ -465,6 +524,9 @@ import {
   newAttachedFiles,
   omittedText,
   snackbar,
+  baseThemeColor,
+  themeColor,
+  getDepartments,
 } from "../store/common.js";
 import {
   currentProject,
@@ -488,7 +550,6 @@ import {
   addIconBasedOnUserId,
 } from "../store/user.js";
 import { editTodo, resetTodo, addTodo } from "../store/todo.js";
-import { getNotification } from "../store/notification.js";
 import workRegistration from "./dialogs/workRegistration.vue";
 import workDetailDialog from "./dialogs/workDetailDialog.vue";
 import {
@@ -498,7 +559,9 @@ import {
 } from "vuetify/labs/VDataTable";
 import { onBeforeMount } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import wikiDetailDialog from "./dialogs/wiki/wikiDetailDialog.vue";
 
+const theme = useTheme();
 const router = useRouter();
 if (!userInfo.value.id) {
   router.push("/login");
@@ -508,7 +571,7 @@ const headers = [
   { title: "ID", key: "id" },
   { title: "タイトル", key: "title" },
   { title: "担当者", key: "staffs" },
-  { title: "状況", key: "stateName" },
+  { title: "状況", key: "stateName.name" },
   { title: "優先度", key: "priority" },
   { title: "カテゴリー", key: "category" },
   { title: "開始日", key: "from" },
@@ -522,6 +585,7 @@ onBeforeMount(async () => {
   await getPriority();
   await getStatus();
   await getSeDailyReportProcess();
+  await getDepartments();
   if (users.value.length == 0) {
     await getUser(0);
   }
@@ -533,7 +597,6 @@ onBeforeMount(async () => {
   }
   await getWork();
   newAttachedFiles.value = [];
-  getNotification();
 });
 
 const reset = () => {
@@ -562,6 +625,10 @@ const openTodo = (work) => {
 .table-footer {
   position: relative;
   height: 75px;
+}
+.blue {
+  background-color: #2196f3;
+  color: white;
 }
 .pagination {
   position: absolute;
